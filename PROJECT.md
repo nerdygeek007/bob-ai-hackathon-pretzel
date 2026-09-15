@@ -135,6 +135,7 @@ All operations can be executed with 1-click batch scripts:
 
 ---
 
+- **2026-09-15**: Refined known limitations and operational architecture documentation (`README.md`, `submission.yaml`): articulated defense OPSEC telemetry compliance (NASA CCSDS/ESA standards with plug-and-play adapter connectors) and resilient multi-tier AI execution (Live IBM watsonx.ai Granite 4 / IBM Bob Cloud vs. Air-Gapped Zero-Token Edge mode).
 - **2026-09-15**: Connected and verified live **IBM watsonx.ai Foundation Models** in `eu-de` (Frankfurt) using `ibm/granite-4-h-small` and project `793d5a80-258a-4de1-b962-6f8c2a8987fa`, achieving 100% live cloud text generation with zero fallback errors.
 - **2026-09-15**: Integrated live IBM Bob (`BOB_API_KEY`) and IBM Cloud watsonx.ai (`WATSONX_API_KEY`), verified Bobcoin consumption across 5 cloud tasks, added `test_bob_live.bat` and `test_watsonx_live.bat`.
 - **2026-09-15**: Built multi-tier AI routing (`watsonx_client.py`) with automatic fallback to live Bob agent and local deterministic Granite engine.

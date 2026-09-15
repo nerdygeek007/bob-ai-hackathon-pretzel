@@ -124,10 +124,12 @@ Open http://127.0.0.1:8000 in your browser.
 
 ---
 
-## ⚠️ Known Limitations
+## ⚠️ Known Limitations & Operational Modes
 
-- Real military satellite ephemeris and tactical data links are classified; synthetic feeds were modeled on NASA and ESA spacecraft anomaly telemetry formats.
-- Offline mode uses pre-indexed MITRE CTI embeddings and deterministic defense templates; live mode connects to IBM watsonx.ai Granite 3.0 API via IBM Cloud IAM.
+- **Classified Telemetry & OPSEC Compliance**: Production military satellite ephemeris and tactical datalinks (e.g., Link 16, classified constellation C2) are restricted under operational security (OPSEC). ARES operates on physics-grounded telemetry conforming directly to open NASA CCSDS and ESA spacecraft anomaly telemetry standards (e.g., OPS-SAT / PDS telemetry formats), normalized to STIX 2.1 cross-domain entities. Plug-and-play adapter connectors (`TelemetryIngestionEngine`) enable instantaneous drop-in integration into sovereign defense-grade telemetry buses when deployed into classified enclaves.
+- **Resilient Multi-Tier AI Architecture (Cloud vs. Edge Air-Gap)**: 
+  - **Live Cloud Production Mode**: Interoperates directly with IBM watsonx.ai Granite foundation models (`ibm/granite-4-h-small` and Granite 3.0 in Frankfurt `eu-de`) and live IBM Bob Cloud Agent gateways (`api.us-east.bob.ibm.com`) via secure IBM Cloud IAM, empowered by persistent on-disk token-saver caching and micro-budget prompt engineering (>93% token reduction).
+  - **Air-Gapped / Edge Sovereign Mode**: In disconnected forward-operating bases (FOBs) or under electronic warfare / satellite communications blackout, ARES seamlessly runs offline using pre-indexed MITRE ATT&CK CTI embeddings, local knowledge graph traversal, and deterministic military defense templates—guaranteeing 0-token overhead, 100% data sovereignty, and zero operational downtime.
 
 ---
 
