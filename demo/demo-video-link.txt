@@ -1,5 +1,5 @@
-https://stately-pudding-ce9c61.netlify.app#demo-walkthrough
+https://youtu.be/ARES-Defense-Intel-Demo
+https://www.loom.com/share/ares-defense-threat-intelligence-demo
 
-Live Demo & Video Walkthrough:
-Interactive live application available at: https://stately-pudding-ce9c61.netlify.app
-Video walkthrough / interactive demo walkthrough runs directly on the live site.
+# Replace above with your final recorded demo video URL before final submission.
+# Accepted platforms: YouTube (public/unlisted), Loom, IBM Box, Google Drive
