@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ares": {
+      "command": "D:\\ibm\\bob-ai-hackathon-pretzel\\.venv\\Scripts\\python.exe",
+      "args": [
+        "D:\\ibm\\bob-ai-hackathon-pretzel\\src\\mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "D:\\ibm\\bob-ai-hackathon-pretzel"
+      }
+    }
+  }
+}
