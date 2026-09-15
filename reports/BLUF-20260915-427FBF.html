@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARES Commander Briefing - BLUF-20260915-427FBF</title>
+    <style>
+        :root {
+            --bg-color: #080c14;
+            --panel-bg: #0f172a;
+            --text-color: #e2e8f0;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --border-color: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            padding: 30px 20px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 35px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+        .banner {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            text-align: center;
+            font-weight: 800;
+            letter-spacing: 2px;
+            font-size: 11px;
+            padding: 6px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 22px; font-weight: 900; letter-spacing: 0.5px; margin-bottom: 8px; color: #f8fafc; }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0 25px 0;
+            font-size: 12px;
+        }
+        .meta-item span { color: #94a3b8; display: block; font-size: 10px; text-transform: uppercase; font-weight: 700; }
+        .meta-item strong { font-size: 13px; color: #f1f5f9; }
+        .bluf-box {
+            background: rgba(6, 182, 212, 0.08);
+            border-left: 4px solid var(--accent-cyan);
+            border-radius: 4px;
+            padding: 18px;
+            margin-bottom: 25px;
+        }
+        .bluf-box h2 { font-size: 13px; text-transform: uppercase; color: var(--accent-cyan); margin-bottom: 8px; letter-spacing: 1px; }
+        .bluf-box p { font-size: 15px; color: #f8fafc; font-weight: 500; line-height: 1.6; }
+        h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #38bdf8;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            margin: 25px 0 12px 0;
+        }
+        ul { list-style-position: inside; font-size: 13px; color: #cbd5e1; margin-bottom: 20px; }
+        ul li { margin-bottom: 6px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+        th { background: rgba(30, 41, 59, 0.8); color: #94a3b8; font-size: 11px; text-transform: uppercase; font-weight: 700; }
+        tr:nth-child(even) { background: rgba(30, 41, 59, 0.3); }
+        .badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            display: inline-block;
+        }
+        .badge-rec { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .badge-alt { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid #64748b; }
+        .badge-tag { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+        .bar-bg { background: #334155; height: 8px; border-radius: 4px; width: 100%; overflow: hidden; }
+        .bar-fill { background: linear-gradient(90deg, #06b6d4, #3b82f6); height: 100%; border-radius: 4px; }
+        .link { color: #38bdf8; text-decoration: none; }
+        .link:hover { text-decoration: underline; }
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .btn {
+            background: #0284c7;
+            color: #fff;
+            border: none;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #0369a1; }
+        @media print {
+            body { background: #fff !important; color: #000 !important; padding: 0; }
+            .container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+            .actions { display: none !important; }
+            .banner { border: 1px solid #000; color: #990000; background: none; }
+            .bluf-box { border-left: 4px solid #000; background: #f1f5f9; }
+            th { background: #e2e8f0 !important; color: #000 !important; }
+            th, td { border: 1px solid #94a3b8; color: #000 !important; }
+            strong, code { color: #000 !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="actions">
+        <button class="btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    </div>
+    <div class="container">
+        <div class="banner">SECRET // NOFORN // EXERCISE</div>
+        <h1>JOINT CYBER-SPACE OPERATIONS DEFENSE INTELLIGENCE BRIEFING</h1>
+        <p style="font-size: 11px; color: #94a3b8;">Document ID: <code>BLUF-20260915-427FBF</code> | Generated: 2026-09-15T15:59:14.471407+00:00</p>
+
+        <div class="meta-grid">
+            <div class="meta-item"><span>Incident Cluster</span><strong>INC-2026-5FC1E0</strong></div>
+            <div class="meta-item"><span>Operational Sector</span><strong>Sector-4-North</strong></div>
+            <div class="meta-item"><span>Threat Attribution</span><strong>APT28 (Fancy Bear) / Sandworm</strong></div>
+            <div class="meta-item"><span>Severity</span><strong>CRITICAL</strong></div>
+            <div class="meta-item"><span>Bayesian Confidence</span><strong style="color: #34d399;">99%</strong></div>
+            <div class="meta-item"><span>Guardian Grounding</span><strong>0.98 (PASSED_DEFENSE_GROUNDING)</strong></div>
+        </div>
+
+        <div class="bluf-box">
+            <h2>1. Bottom Line Up Front (BLUF)</h2>
+            <p>Coordinated multi-domain intrusion targeting Sector 4 Ground Gateway via credential stuffing (T1078), followed by in-memory PowerShell execution (T1059.001) attempting unauthorized Modbus command injection on Satellite Tracking PLC (T0814).</p>
+        </div>
+
+        <h3>2. Confirmed Operational Findings</h3>
+        <ul>
+            <li>Sensor confirmation from 3 domains: cyber_edr, satellite_ew, cyber_siem.</li><li>Detected 5 adversary techniques including T0814, T1059, T1078.</li><li>Primary threat signature aligns with APT28 (Fancy Bear) / Sandworm (94% confidence).</li><li>Bayesian threat confidence calculated at 99%.</li><li>Explainable AI (XAI) Lead Driver: Multi-Domain Cross-Sensor Fusion (38.5% attribution).</li>
+        </ul>
+
+        <h3>3. Explainable AI (XAI) Decision Drivers</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Decision Driver</th>
+                    <th style="text-align: center;">Weight</th>
+                    <th style="width: 160px;">Attribution Bar</th>
+                    <th>Signal Direction</th>
+                    <th>Evidence Rationale</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td><strong>Multi-Domain Cross-Sensor Fusion</strong></td>
+                    <td style="text-align: center;"><strong>38.5%</strong></td>
+                    <td>
+                        <div class="bar-bg"><div class="bar-fill" style="width: 96%;"></div></div>
+                    </td>
+                    <td><span class="badge badge-tag">RISK_INCREASING</span></td>
+                    <td style="font-size: 11px; color: #94a3b8;">Simultaneous correlation across 3 domain(s): ['cyber_edr', 'cyber_siem', 'satellite_ew'].</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>MITRE ATT&CK & Sequence Alignment</strong></td>
+                    <td style="text-align: center;"><strong>28.8%</strong></td>
+                    <td>
+                        <div class="bar-bg"><div class="bar-fill" style="width: 72%;"></div></div>
+                    </td>
+                    <td><span class="badge badge-tag">RISK_INCREASING</span></td>
+                    <td style="font-size: 11px; color: #94a3b8;">5 alert(s) exhibited active adversary execution signatures.</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>Temporal Entropy & Anti-Chaff Score</strong></td>
+                    <td style="text-align: center;"><strong>11.5%</strong></td>
+                    <td>
+                        <div class="bar-bg"><div class="bar-fill" style="width: 28%;"></div></div>
+                    </td>
+                    <td><span class="badge badge-tag">NEUTRAL</span></td>
+                    <td style="font-size: 11px; color: #94a3b8;">Cluster temporal entropy evaluated at 2.32 bits (flood suppression: False).</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>Critical Asset & Defense Vulnerability</strong></td>
+                    <td style="text-align: center;"><strong>21.2%</strong></td>
+                    <td>
+                        <div class="bar-bg"><div class="bar-fill" style="width: 53%;"></div></div>
+                    </td>
+                    <td><span class="badge badge-tag">RISK_INCREASING</span></td>
+                    <td style="font-size: 11px; color: #94a3b8;">Target infrastructure includes vital defense communications, satellite links, or tactical nodes.</td>
+                </tr>
+                
+            </tbody>
+        </table>
+
+        <h3>4. MITRE ATT&CK Matrix Mapping</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Technique</th>
+                    <th>Name</th>
+                    <th>Tactic</th>
+                    <th style="text-align: center;">Confidence</th>
+                    <th>Defensive Mitigation</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td><a href="https://attack.mitre.org/techniques/T0814" target="_blank" class="link">T0814</a></td>
+                <td><strong>Denial of Control (ICS / SCADA)</strong></td>
+                <td><span class="badge badge-tag">Inhibit Response Function</span></td>
+                <td style="text-align: center;">81%</td>
+                <td style="font-size: 11px;">Air-gap SCADA/PLC control networks</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://attack.mitre.org/techniques/T1059" target="_blank" class="link">T1059</a></td>
+                <td><strong>Command and Scripting Interpreter</strong></td>
+                <td><span class="badge badge-tag">Execution</span></td>
+                <td style="text-align: center;">73%</td>
+                <td style="font-size: 11px;">Enable PowerShell Constrained Language Mode</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://attack.mitre.org/techniques/T1078" target="_blank" class="link">T1078</a></td>
+                <td><strong>Valid Accounts</strong></td>
+                <td><span class="badge badge-tag">Initial Access, Persistence, Privilege Escalation, Defense Evasion</span></td>
+                <td style="text-align: center;">63%</td>
+                <td style="font-size: 11px;">Enforce multi-factor authentication (MFA)</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://attack.mitre.org/techniques/T1566" target="_blank" class="link">T1566</a></td>
+                <td><strong>Phishing</strong></td>
+                <td><span class="badge badge-tag">Initial Access</span></td>
+                <td style="text-align: center;">63%</td>
+                <td style="font-size: 11px;">Monitor network telemetry</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://attack.mitre.org/techniques/T1071" target="_blank" class="link">T1071</a></td>
+                <td><strong>Application Layer Protocol</strong></td>
+                <td><span class="badge badge-tag">Command and Control</span></td>
+                <td style="text-align: center;">63%</td>
+                <td style="font-size: 11px;">Block unapproved outbound HTTPS destinations</td>
+            </tr>
+            
+            </tbody>
+        </table>
+
+        <h3>5. Wargamed Defensive Courses of Action (COAs)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Option</th>
+                    <th>Course of Action</th>
+                    <th style="text-align: center;">Containment</th>
+                    <th style="text-align: center;">Disruption</th>
+                    <th style="text-align: center;">Status</th>
+                    <th>Tradeoff Summary</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td><strong>COA-1</strong></td>
+                <td><strong>Immediate Subnet Isolation (Hard Sever)</strong></td>
+                <td style="text-align: center; color: #38bdf8;"><strong>100%</strong></td>
+                <td style="text-align: center;">HIGH</td>
+                <td style="text-align: center;"><span class="badge badge-alt">ALTERNATIVE</span></td>
+                <td style="font-size: 11px; color: #cbd5e1;">Guarantees 100% containment by severing Gateway-04, but disables live UAV telemetry for 45 minutes.</td>
+            </tr>
+            
+            <tr>
+                <td><strong>COA-2</strong></td>
+                <td><strong>Targeted Session Termination & Secondary LEO Constellation Reroute</strong></td>
+                <td style="text-align: center; color: #38bdf8;"><strong>94%</strong></td>
+                <td style="text-align: center;">NONE</td>
+                <td style="text-align: center;"><span class="badge badge-rec">RECOMMENDED</span></td>
+                <td style="font-size: 11px; color: #cbd5e1;">Revokes compromised credentials, isolates malicious PID, and hops satellite tracking to encrypted backup constellation. Zero mission downtime.</td>
+            </tr>
+            
+            <tr>
+                <td><strong>COA-3</strong></td>
+                <td><strong>Active Deception & Honeytoken Shadowing</strong></td>
+                <td style="text-align: center; color: #38bdf8;"><strong>88%</strong></td>
+                <td style="text-align: center;">LOW</td>
+                <td style="text-align: center;"><span class="badge badge-alt">ALTERNATIVE</span></td>
+                <td style="font-size: 11px; color: #cbd5e1;">Feeds synthetic telemetry to the adversary while tracking outbound C2 infrastructure.</td>
+            </tr>
+            
+            </tbody>
+        </table>
+
+        <h3>6. Cryptographic Sensor Provenance & Audit Trail</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align: center;">#</th>
+                    <th>Source Alert ID</th>
+                    <th>Timestamp</th>
+                    <th>SHA-256 Provenance Hash</th>
+                    <th style="text-align: center;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td style="text-align: center;">1</td>
+                <td><code>SIEM-EBDEDFDB</code></td>
+                <td><code>2026-09-15T15:48:14.454198+00:00</code></td>
+                <td><code style="font-size: 10px;">cea9f3ed20cd9f65...</code></td>
+                <td style="text-align: center;"><span class="badge badge-rec">GROUNDED</span></td>
+            </tr>
+            
+            <tr>
+                <td style="text-align: center;">2</td>
+                <td><code>EDR-D36EF4FE</code></td>
+                <td><code>2026-09-15T15:51:14.454198+00:00</code></td>
+                <td><code style="font-size: 10px;">3d8dab72fecbbdfe...</code></td>
+                <td style="text-align: center;"><span class="badge badge-rec">GROUNDED</span></td>
+            </tr>
+            
+            <tr>
+                <td style="text-align: center;">3</td>
+                <td><code>SAT-4DE9DCBA</code></td>
+                <td><code>2026-09-15T15:45:14.454198+00:00</code></td>
+                <td><code style="font-size: 10px;">fb57e12c5c784ccc...</code></td>
+                <td style="text-align: center;"><span class="badge badge-rec">GROUNDED</span></td>
+            </tr>
+            
+            <tr>
+                <td style="text-align: center;">4</td>
+                <td><code>NET-04F7798E</code></td>
+                <td><code>2026-09-15T15:54:14.454198+00:00</code></td>
+                <td><code style="font-size: 10px;">21202403bdb9f695...</code></td>
+                <td style="text-align: center;"><span class="badge badge-rec">GROUNDED</span></td>
+            </tr>
+            
+            <tr>
+                <td style="text-align: center;">5</td>
+                <td><code>ICS-6A50074B</code></td>
+                <td><code>2026-09-15T15:57:14.454198+00:00</code></td>
+                <td><code style="font-size: 10px;">d15f709c7ebc5984...</code></td>
+                <td style="text-align: center;"><span class="badge badge-rec">GROUNDED</span></td>
+            </tr>
+            
+            </tbody>
+        </table>
+
+        <div style="margin-top: 30px; font-size: 10px; color: #64748b; text-align: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            SECRET // NOFORN // EXERCISE — DECLASSIFY ON: 2051-09-15 // ARES DEFENSE INTELLIGENCE PLATFORM // IBM WATSONX GRANITE 3.0
+        </div>
+    </div>
+</body>
+</html>

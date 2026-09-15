@@ -95,6 +95,12 @@ class BlufGenerator:
             f"Bayesian threat confidence calculated at {int(cluster.bayesian_threat_confidence * 100)}%."
         ]
 
+        if cluster.xai_explanation and cluster.xai_explanation.feature_attributions:
+            top_attr = max(cluster.xai_explanation.feature_attributions, key=lambda a: a.importance_weight)
+            key_findings.append(
+                f"Explainable AI (XAI) Lead Driver: {top_attr.feature_name} ({top_attr.importance_weight}% attribution)."
+            )
+
         # 3. Generate BLUF narrative via watsonx Granite (with Token Optimization)
         if cluster.overall_severity == SeverityLevel.LOW:
             # Zero-token deterministic fast path for benign/low-severity events
@@ -142,6 +148,7 @@ class BlufGenerator:
             severity=cluster.overall_severity,
             bayesian_confidence=cluster.bayesian_threat_confidence,
             threat_actor_attribution=cluster.primary_threat_actor or "State-Sponsored APT",
+            xai_explanation=cluster.xai_explanation,
             key_findings=key_findings,
             provenance_citations=citations,
             mitre_ttps=mitre_ttps,

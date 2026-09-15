@@ -1,0 +1,166 @@
+{
+  "report_id": "BLUF-20260915-427FBF",
+  "classification": "SECRET // NOFORN // EXERCISE",
+  "cluster_id": "INC-2026-5FC1E0",
+  "sector": "Sector-4-North",
+  "severity": "CRITICAL",
+  "bayesian_confidence": "99%",
+  "threat_actor": "APT28 (Fancy Bear) / Sandworm",
+  "bottom_line_up_front": "Coordinated multi-domain intrusion targeting Sector 4 Ground Gateway via credential stuffing (T1078), followed by in-memory PowerShell execution (T1059.001) attempting unauthorized Modbus command injection on Satellite Tracking PLC (T0814).",
+  "key_findings": [
+    "Sensor confirmation from 3 domains: cyber_edr, satellite_ew, cyber_siem.",
+    "Detected 5 adversary techniques including T0814, T1059, T1078.",
+    "Primary threat signature aligns with APT28 (Fancy Bear) / Sandworm (94% confidence).",
+    "Bayesian threat confidence calculated at 99%.",
+    "Explainable AI (XAI) Lead Driver: Multi-Domain Cross-Sensor Fusion (38.5% attribution)."
+  ],
+  "xai_explanation": {
+    "algorithm": "Spatio-Temporal Graph + Bayesian + SHAP Feature Attribution",
+    "base_rate_prior": 0.1,
+    "posterior_confidence": 0.99,
+    "feature_attributions": [
+      {
+        "feature_name": "Multi-Domain Cross-Sensor Fusion",
+        "importance_weight": 38.5,
+        "signal_direction": "RISK_INCREASING",
+        "evidence_rationale": "Simultaneous correlation across 3 domain(s): ['cyber_edr', 'cyber_siem', 'satellite_ew']."
+      },
+      {
+        "feature_name": "MITRE ATT&CK & Sequence Alignment",
+        "importance_weight": 28.8,
+        "signal_direction": "RISK_INCREASING",
+        "evidence_rationale": "5 alert(s) exhibited active adversary execution signatures."
+      },
+      {
+        "feature_name": "Temporal Entropy & Anti-Chaff Score",
+        "importance_weight": 11.5,
+        "signal_direction": "NEUTRAL",
+        "evidence_rationale": "Cluster temporal entropy evaluated at 2.32 bits (flood suppression: False)."
+      },
+      {
+        "feature_name": "Critical Asset & Defense Vulnerability",
+        "importance_weight": 21.2,
+        "signal_direction": "RISK_INCREASING",
+        "evidence_rationale": "Target infrastructure includes vital defense communications, satellite links, or tactical nodes."
+      }
+    ]
+  },
+  "mitre_ttps": [
+    {
+      "id": "T0814",
+      "name": "Denial of Control (ICS / SCADA)",
+      "tactic": "Inhibit Response Function",
+      "confidence": "81%",
+      "mitigations": [
+        "Air-gap SCADA/PLC control networks",
+        "Enforce Modbus/TCP message signing",
+        "Isolate satellite tracking subnet"
+      ]
+    },
+    {
+      "id": "T1059",
+      "name": "Command and Scripting Interpreter",
+      "tactic": "Execution",
+      "confidence": "73%",
+      "mitigations": [
+        "Enable PowerShell Constrained Language Mode",
+        "Block unapproved script interpreters",
+        "Enable script block logging"
+      ]
+    },
+    {
+      "id": "T1078",
+      "name": "Valid Accounts",
+      "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion",
+      "confidence": "63%",
+      "mitigations": [
+        "Enforce multi-factor authentication (MFA)",
+        "Rotate privileged service credentials",
+        "Disable unused accounts"
+      ]
+    },
+    {
+      "id": "T1566",
+      "name": "Phishing",
+      "tactic": "Initial Access",
+      "confidence": "63%",
+      "mitigations": [
+        "Monitor network telemetry",
+        "Enforce principle of least privilege"
+      ]
+    },
+    {
+      "id": "T1071",
+      "name": "Application Layer Protocol",
+      "tactic": "Command and Control",
+      "confidence": "63%",
+      "mitigations": [
+        "Block unapproved outbound HTTPS destinations",
+        "Implement TLS/SSL inspection",
+        "Deploy DNS sinkholing"
+      ]
+    }
+  ],
+  "wargamed_coas": [
+    {
+      "option_id": "COA-1",
+      "title": "Immediate Subnet Isolation (Hard Sever)",
+      "containment": "100%",
+      "mission_disruption": "HIGH",
+      "is_recommended": false,
+      "tradeoff": "Guarantees 100% containment by severing Gateway-04, but disables live UAV telemetry for 45 minutes."
+    },
+    {
+      "option_id": "COA-2",
+      "title": "Targeted Session Termination & Secondary LEO Constellation Reroute",
+      "containment": "94%",
+      "mission_disruption": "NONE",
+      "is_recommended": true,
+      "tradeoff": "Revokes compromised credentials, isolates malicious PID, and hops satellite tracking to encrypted backup constellation. Zero mission downtime."
+    },
+    {
+      "option_id": "COA-3",
+      "title": "Active Deception & Honeytoken Shadowing",
+      "containment": "88%",
+      "mission_disruption": "LOW",
+      "is_recommended": false,
+      "tradeoff": "Feeds synthetic telemetry to the adversary while tracking outbound C2 infrastructure."
+    }
+  ],
+  "guardian_assurance": {
+    "score": 0.98,
+    "verdict": "PASSED_DEFENSE_GROUNDING"
+  },
+  "provenance_citations": [
+    {
+      "claim_index": 1,
+      "sensor_id": "SIEM-EBDEDFDB",
+      "timestamp": "2026-09-15T15:48:14.454198+00:00",
+      "sha256_hash": "cea9f3ed20cd9f65..."
+    },
+    {
+      "claim_index": 2,
+      "sensor_id": "EDR-D36EF4FE",
+      "timestamp": "2026-09-15T15:51:14.454198+00:00",
+      "sha256_hash": "3d8dab72fecbbdfe..."
+    },
+    {
+      "claim_index": 3,
+      "sensor_id": "SAT-4DE9DCBA",
+      "timestamp": "2026-09-15T15:45:14.454198+00:00",
+      "sha256_hash": "fb57e12c5c784ccc..."
+    },
+    {
+      "claim_index": 4,
+      "sensor_id": "NET-04F7798E",
+      "timestamp": "2026-09-15T15:54:14.454198+00:00",
+      "sha256_hash": "21202403bdb9f695..."
+    },
+    {
+      "claim_index": 5,
+      "sensor_id": "ICS-6A50074B",
+      "timestamp": "2026-09-15T15:57:14.454198+00:00",
+      "sha256_hash": "d15f709c7ebc5984..."
+    }
+  ]
+}

@@ -1,447 +1,324 @@
 """
-normalize_datasets.py
-
-Downloads the selected static demo datasets and normalizes them into a single
-fused CSV/JSON with a common schema, ready to feed into the STIX adapters and
-the ATT&CK mapper. Also injects synthetic scenario timestamps/asset IDs so
-records from unrelated sources can be correlated (see SCENARIOS below).
-
-Run:
-    pip install requests pandas --break-system-packages
-    python normalize_datasets.py
-
-Output:
-    data/normalized/fused_dataset.csv
-    data/normalized/fused_dataset.json
+ARES Telemetry Normalizer
+Converts heterogeneous raw logs (CEF, Syslog, EDR, Satellite Telemetry) into standard STIX 2.1 entities.
+Extracts IOCs, computes SHA-256 provenance hashes, and assigns severity.
 """
 
+import hashlib
 import json
-import random
-from pathlib import Path
-from datetime import datetime, timedelta, timezone
-
-import requests
-import pandas as pd
-
-RAW_DIR = Path("data/raw")
-OUT_DIR = Path("data")
-RAW_DIR.mkdir(parents=True, exist_ok=True)
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# --------------------------------------------------------------------------
-# 1. Source registry — direct download links confirmed working as of this
-#    build. If a link breaks, this is where to fix it.
-# --------------------------------------------------------------------------
-
-SOURCES = {
-    "mitre_enterprise": {
-        "url": "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json",
-        "path": RAW_DIR / "enterprise-attack.json",
-        "type": "json",
-    },
-    "mitre_ics": {
-        "url": "https://raw.githubusercontent.com/mitre/cti/master/ics-attack/ics-attack.json",
-        "path": RAW_DIR / "ics-attack.json",
-        "type": "json",
-    },
-    "cisa_kev": {
-        "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
-        "path": RAW_DIR / "cisa_kev.json",
-        "type": "json",
-    },
-    "evtx_metadata": {
-        "url": "https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES/raw/refs/heads/master/evtx_data.csv",
-        "path": RAW_DIR / "evtx_data.csv",
-        "type": "csv",
-    },
-    "telemanom_anomalies": {
-        "url": "https://raw.githubusercontent.com/khundman/telemanom/master/labeled_anomalies.csv",
-        "path": RAW_DIR / "labeled_anomalies.csv",
-        "type": "csv",
-    },
-    "et_rules_scan": {
-        "url": "https://rules.emergingthreats.net/open/suricata/rules/emerging-scan.rules",
-        "path": RAW_DIR / "emerging-scan.rules",
-        "type": "text",
-    },
-    "nasa_catalog": {
-        "url": "https://data.nasa.gov/data.json",
-        "path": RAW_DIR / "nasa_data.json",
-        "type": "json",
-    },
-    # CIC-IDS2018 is not a direct https download (S3 only). Fetch it once
-    # separately, then point this path at the local file:
-    #   aws s3 cp --no-sign-request \
-    #     "s3://cse-cic-ids2018/Processed Traffic Data for ML Algorithms/Thursday-01-03-2018_TrafficForML_CICFlowMeter.csv" \
-    #     data/raw/cic_ids2018_thursday.csv
-    "cic_ids2018": {
-        "url": None,
-        "path": RAW_DIR / "cic_ids2018_thursday.csv",
-        "type": "csv",
-    },
-    # Splunk attack_data uses git-lfs and technique-named folders, not a
-    # single flat file. Pull one technique folder manually, e.g.:
-    #   git clone --filter=blob:none https://github.com/splunk/attack_data.git
-    #   cd attack_data
-    #   git lfs pull --include="datasets/attack_techniques/T1003.001/atomic_red_team/windows-sysmon.log"
-    # then point this path at the pulled log file:
-    "splunk_attack_data": {
-        "url": None,
-        "path": RAW_DIR / "windows-sysmon.log",
-        "type": "text",
-        "technique_hint": "T1003.001",  # folder name IS the technique ID
-    },
-}
+import re
+import uuid
+import xml.etree.ElementTree as ET
+from typing import List, Optional, Dict, Any, Union
+from src.engine.schemas import (
+    RawTelemetryAlert,
+    NormalizedStixEntity,
+    SeverityLevel,
+    TelemetryDomain,
+    OCSFSecurityFinding,
+    CoTTelemetry
+)
 
 
-def download(name, spec):
-    if spec["url"] is None:
-        if not spec["path"].exists():
-            print(f"[skip] {name}: no direct URL, fetch manually (see comment) "
-                  f"and place at {spec['path']}")
-        return
-    if spec["path"].exists():
-        print(f"[cache] {name}: already downloaded")
-        return
-    print(f"[download] {name}: {spec['url']}")
-    resp = requests.get(spec["url"], timeout=60)
-    resp.raise_for_status()
-    spec["path"].write_bytes(resp.content)
+class TelemetryNormalizer:
+    """Normalizes raw heterogeneous alert streams (CEF, Syslog, EDR, OCSF, CoT) into standard STIX 2.1 objects."""
 
+    @staticmethod
+    def extract_iocs(text: str) -> List[str]:
+        """Extracts IPs, domain names, hashes, CVEs, and defense asset tags from raw text."""
+        iocs = set()
 
-# --------------------------------------------------------------------------
-# 2. Scenario config — this is what makes unrelated static datasets look
-#    like one integrated system's logs. Every adapter tags its output with
-#    one of these scenarios: a shared asset_id, a rebased UTC time window,
-#    and a shared campaign_id.
-# --------------------------------------------------------------------------
+        # IPv4 pattern
+        ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+        for ip in re.findall(ip_pattern, text):
+            if not ip.startswith("127.") and ip != "0.0.0.0":
+                iocs.add(f"ipv4:{ip}")
 
-SCENARIOS = [
-    {
-        "campaign_id": "CAMPAIGN-ALPHA",
-        "asset_id": "GS-EAST-04",          # fictional ground-station asset
-        "window_start": datetime(2026, 9, 10, 6, 0, tzinfo=timezone.utc),
-        "window_end": datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc),
-    },
-    {
-        "campaign_id": "CAMPAIGN-BRAVO",
-        "asset_id": "SAT-ALPHA-1",         # fictional spacecraft asset
-        "window_start": datetime(2026, 9, 11, 13, 0, tzinfo=timezone.utc),
-        "window_end": datetime(2026, 9, 11, 15, 30, tzinfo=timezone.utc),
-    },
-    {
-        "campaign_id": "CAMPAIGN-CHARLIE",
-        "asset_id": "NET-PERIM-11",        # fictional perimeter/network asset
-        "window_start": datetime(2026, 9, 12, 2, 0, tzinfo=timezone.utc),
-        "window_end": datetime(2026, 9, 12, 4, 0, tzinfo=timezone.utc),
-    },
-]
+        # MD5 / SHA256 hashes
+        sha256_pattern = r'\b[a-fA-F0-9]{64}\b'
+        for h in re.findall(sha256_pattern, text):
+            iocs.add(f"hash-sha256:{h}")
 
+        md5_pattern = r'\b[a-fA-F0-9]{32}\b'
+        for h in re.findall(md5_pattern, text):
+            iocs.add(f"hash-md5:{h}")
 
-def random_timestamp(scenario):
-    span = (scenario["window_end"] - scenario["window_start"]).total_seconds()
-    return scenario["window_start"] + timedelta(seconds=random.uniform(0, span))
+        # CVEs
+        cve_pattern = r'\bCVE-\d{4}-\d{4,7}\b'
+        for cve in re.findall(cve_pattern, text, re.IGNORECASE):
+            iocs.add(f"cve:{cve.upper()}")
 
+        # Process names
+        proc_pattern = r'\b([a-zA-Z0-9_\-\.]+\.(?:exe|sh|bin|dll|ps1|bat))\b'
+        for proc in re.findall(proc_pattern, text, re.IGNORECASE):
+            iocs.add(f"process:{proc.lower()}")
 
-def pick_scenario(index):
-    # Round-robin so records spread across all fake incidents rather than
-    # piling into one — real correlation still depends on overlapping
-    # asset_id + time window, this just seeds the pool.
-    return SCENARIOS[index % len(SCENARIOS)]
+        # Satellite / Defense asset tags
+        asset_pattern = r'\b(SAT-[A-Z0-9-]+|PLC-[A-Z0-9-]+|GW-[0-9]+|S[0-9]-GW-[0-9]+|UAV-[A-Z0-9-]+)\b'
+        for asset in re.findall(asset_pattern, text):
+            iocs.add(f"defense-asset:{asset}")
 
+        # NORAD Catalog ID pattern
+        norad_pattern = r'\b(?:NORAD[:\s-]?|\bCATNR[:\s-]?)(\d{4,6})\b'
+        for norad in re.findall(norad_pattern, text, re.IGNORECASE):
+            iocs.add(f"norad-cat-id:{norad}")
 
-# --------------------------------------------------------------------------
-# 3. Common normalized record schema
-#    Every adapter emits dicts shaped like this. This is the schema the
-#    STIX adapters (Indicator/Observed Data/Sighting) and ATT&CK
-#    technique_linker.py consume downstream.
-# --------------------------------------------------------------------------
+        # Real Spacecraft / Satellite Identifiers
+        sat_names = r'\b(SAR-LUPE\s*\d+|NAVSTAR\s*\d+|COSMO-SkyMed\s*\d*|SAPPHIRE|PRAETORIAN\s*[A-Z0-9_]*|MILSTAR\s*\d*|WGS-\d+)\b'
+        for sname in re.findall(sat_names, text, re.IGNORECASE):
+            iocs.add(f"defense-satellite-asset:{sname.strip()}")
 
-FUSED_COLUMNS = [
-    "record_id", "source", "timestamp", "scenario_campaign_id", "asset_id",
-    "technique_id", "technique_name", "description", "confidence_hint",
-    "lat", "lon", "raw_ref",
-]
+        # RF Bands & Jamming indicators
+        rf_pattern = r'\b(Ku-Band|Ka-Band|X-Band|C-Band|S-Band|UHF|SHF)\b'
+        for rf in re.findall(rf_pattern, text, re.IGNORECASE):
+            iocs.add(f"rf-band:{rf.upper()}")
 
+        return sorted(list(iocs))
 
-def make_record(record_id, source, scenario, technique_id=None,
-                 technique_name=None, description="", confidence_hint="unscored",
-                 lat=None, lon=None, raw_ref=""):
-    return {
-        "record_id": record_id,
-        "source": source,
-        "timestamp": random_timestamp(scenario).isoformat(),
-        "scenario_campaign_id": scenario["campaign_id"],
-        "asset_id": scenario["asset_id"],
-        "technique_id": technique_id or "",
-        "technique_name": technique_name or "",
-        "description": description,
-        "confidence_hint": confidence_hint,
-        "lat": lat,
-        "lon": lon,
-        "raw_ref": raw_ref,
-    }
+    @staticmethod
+    def calculate_severity(alert: RawTelemetryAlert) -> SeverityLevel:
+        """Determines alert severity based on domain, event code, and payload signals."""
+        payload_lower = alert.raw_payload.lower()
 
+        # Critical triggers
+        if any(w in payload_lower for w in ["critical", "zero_day", "unauthorized modbus", "unauthorized_modbus", "unauthorized", "transponder lock lost", "rf jamming", "carrier jamming", "dirty pipe"]):
+            return SeverityLevel.CRITICAL
 
-# --------------------------------------------------------------------------
-# 4. Per-source adapters
-#    NOTE: evtx_data.csv and cic_ids2018 column names should be confirmed
-#    by inspecting the first few rows locally (`head -1 file.csv`) before
-#    relying on this — column names below are best-effort with a fallback.
-# --------------------------------------------------------------------------
+        # High triggers
+        if any(w in payload_lower for w in ["failed ssh logins", "auth_fail_burst", "auth_burst_fail", "privilege_escalation", "powershell.exe", "lsass", "c2 node", "cobalt strike", "beaconing", "ephemeris_anomaly", "ephemeris drift", "telemetry lock disrupted", "doppler"]):
+            return SeverityLevel.HIGH
 
-def adapt_evtx_metadata():
-    path = SOURCES["evtx_metadata"]["path"]
-    if not path.exists():
-        return []
-    df = pd.read_csv(path, on_bad_lines="skip", engine="python")
-    technique_col = next((c for c in df.columns if "technique" in c.lower()), None)
-    name_col = next((c for c in df.columns if "file" in c.lower() or "name" in c.lower()), df.columns[0])
+        # Medium triggers
+        if any(w in payload_lower for w in ["port scan", "port_scan", "syn probe", "uncommon activity", "snr drop"]):
+            return SeverityLevel.MEDIUM
 
-    records = []
-    for i, row in df.iterrows():
-        scenario = pick_scenario(i)
-        records.append(make_record(
-            record_id=f"evtx-{i}",
-            source="cyber_sensor:evtx",
-            scenario=scenario,
-            technique_id=str(row[technique_col]) if technique_col else "",
-            description=f"EVTX-labeled event: {row.get(name_col, '')}",
-            confidence_hint="labeled",
-            raw_ref=str(row.get(name_col, "")),
-        ))
-    return records
+        # Low triggers / benign
+        is_truly_authorized = "authorized" in payload_lower and "unauthorized" not in payload_lower
+        if is_truly_authorized or any(w in payload_lower for w in ["info:", "scheduled", "backup"]):
+            return SeverityLevel.LOW
 
+        return SeverityLevel.MEDIUM
 
-def adapt_splunk_attack_data():
-    spec = SOURCES["splunk_attack_data"]
-    path = spec["path"]
-    if not path.exists():
-        return []
-    technique_id = spec.get("technique_hint", "")
-    records = []
-    with open(path, "r", errors="ignore") as f:
-        lines = [l.strip() for l in f if l.strip()][:500]  # cap for demo size
-    for i, line in enumerate(lines):
-        scenario = pick_scenario(i)
-        records.append(make_record(
-            record_id=f"splunkdata-{i}",
-            source="siem:splunk_attack_data",
-            scenario=scenario,
-            technique_id=technique_id,
-            description="Sysmon/security event from splunk/attack_data corpus",
-            confidence_hint="labeled",  # folder name = ground-truth technique
-            raw_ref=line[:200],
-        ))
-    return records
+    @classmethod
+    def normalize_alert(cls, alert: RawTelemetryAlert) -> NormalizedStixEntity:
+        """Converts a single RawTelemetryAlert to a NormalizedStixEntity with cryptographic hash."""
+        # Calculate SHA-256 hash of raw payload for provenance tracking
+        raw_hash = hashlib.sha256(alert.raw_payload.encode("utf-8")).hexdigest()
+        
+        # Extract IOCs
+        iocs = cls.extract_iocs(alert.raw_payload)
+        if alert.source_ip:
+            iocs.append(f"src-ip:{alert.source_ip}")
+        if alert.destination_ip:
+            iocs.append(f"dst-ip:{alert.destination_ip}")
+        if alert.target_entity:
+            iocs.append(f"target:{alert.target_entity}")
+        iocs = sorted(list(set(iocs)))
 
+        severity = cls.calculate_severity(alert)
+        confidence = 0.95 if severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH] else 0.70
 
-def adapt_telemanom():
-    path = SOURCES["telemanom_anomalies"]["path"]
-    if not path.exists():
-        return []
-    df = pd.read_csv(path)
-    records = []
-    for i, row in df.iterrows():
-        scenario = pick_scenario(i)
-        chan = row.get("chan_id", row.get("channel", f"CH-{i}"))
-        records.append(make_record(
-            record_id=f"telemanom-{i}",
-            source="satellite_feed:telemanom",
-            scenario=scenario,
-            description=f"Anomaly on spacecraft channel {chan}",
-            confidence_hint="sensor_anomaly",  # NOT a cyberattack label
-            raw_ref=str(chan),
-        ))
-    return records
+        return NormalizedStixEntity(
+            stix_id=f"stix-obs-{alert.alert_id.lower()}",
+            original_alert_id=alert.alert_id,
+            timestamp=alert.timestamp,
+            domain=alert.domain,
+            entity_type="observed-data",
+            name=f"{alert.domain.value.upper()} Event [{alert.event_code or alert.source_name}]",
+            description=alert.raw_payload[:300],
+            severity=severity,
+            confidence=confidence,
+            iocs=iocs,
+            tactics_hint=alert.event_code,
+            raw_reference_hash=raw_hash
+        )
 
+    @classmethod
+    def normalize_ocsf(cls, finding: Union[Dict[str, Any], OCSFSecurityFinding]) -> NormalizedStixEntity:
+        """Converts an OCSF v1.1 Security Finding (Class 2001/1001) into a standard STIX 2.1 entity."""
+        if isinstance(finding, OCSFSecurityFinding):
+            data = finding.model_dump()
+        elif isinstance(finding, dict):
+            data = finding
+        else:
+            raise ValueError(f"Invalid OCSF finding format: {type(finding)}")
 
-def simulate_satellite_events(n=25):
-    """
-    Simulated satellite/geospatial telemetry as suggested: lat/lon + event
-    type JSON, tagged into the same scenario campaigns so it can correlate
-    against the cyber-side records above (e.g. a ground-station asset_id
-    shared with a SIEM/EVTX alert in the same time window).
-    """
-    event_types = [
-        "gps_signal_loss", "rf_snr_drop", "unexpected_reboot",
-        "unauthorized_command_attempt", "telemetry_gap", "orbit_deviation_flag",
-    ]
-    # Rough real-world-ish coordinate spread (ground stations / LEO passes)
-    coord_pool = [
-        (38.9, -77.0), (51.5, -0.1), (35.0, 139.0), (-33.9, 18.4),
-        (28.6, 77.2), (55.75, 37.6), (1.3, 103.8), (-23.5, -46.6),
-    ]
-    records = []
-    for i in range(n):
-        scenario = pick_scenario(i)
-        lat, lon = random.choice(coord_pool)
-        records.append(make_record(
-            record_id=f"simsat-{i}",
-            source="satellite_feed:simulated",
-            scenario=scenario,
-            description=f"Simulated event: {random.choice(event_types)}",
-            confidence_hint="simulated",
-            lat=round(lat + random.uniform(-0.5, 0.5), 4),
-            lon=round(lon + random.uniform(-0.5, 0.5), 4),
-            raw_ref="synthetic",
-        ))
-    return records
+        raw_str = json.dumps(data, sort_keys=True)
+        raw_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
+        # Extract OCSF fields
+        finding_info = data.get("finding_info", {})
+        title = finding_info.get("title") or "OCSF Security Finding"
+        finding_uid = finding_info.get("uid") or f"OCSF-{uuid.uuid4().hex[:8].upper()}"
+        timestamp = data.get("time") or "2026-09-15T12:00:00Z"
+        
+        # Severity mapping: 1=Info, 2=Low, 3=Medium, 4=High, 5=Critical
+        sev_id = data.get("severity_id", 3)
+        if sev_id >= 5:
+            severity = SeverityLevel.CRITICAL
+        elif sev_id == 4:
+            severity = SeverityLevel.HIGH
+        elif sev_id == 3:
+            severity = SeverityLevel.MEDIUM
+        else:
+            severity = SeverityLevel.LOW
 
-def adapt_et_rules():
-    path = SOURCES["et_rules_scan"]["path"]
-    if not path.exists():
-        return []
-    records = []
-    with open(path, "r", errors="ignore") as f:
-        lines = [l for l in f if l.strip().startswith("alert")]
-    for i, line in enumerate(lines):
-        scenario = pick_scenario(i)
-        msg = line.split('msg:"')[1].split('"')[0] if 'msg:"' in line else ""
-        records.append(make_record(
-            record_id=f"etrule-{i}",
-            source="siem:et_rules",
-            scenario=scenario,
-            description=msg or "ET Open rule match",
-            confidence_hint="signature_match",
-            raw_ref=line.strip()[:200],
-        ))
-    return records
+        iocs = set(cls.extract_iocs(raw_str))
 
+        # OCSF Observables list
+        for obs in data.get("observables", []):
+            obs_type = obs.get("type", "observable")
+            obs_val = obs.get("value")
+            if obs_val:
+                iocs.add(f"{obs_type}:{obs_val}")
 
-def adapt_cic_ids2018():
-    path = SOURCES["cic_ids2018"]["path"]
-    if not path.exists():
-        print("[skip] cic_ids2018: file not present, fetch via aws s3 cp first")
-        return []
-    df = pd.read_csv(path, nrows=2000, on_bad_lines="skip", engine="python")
-    label_col = next((c for c in df.columns if c.strip().lower() == "label"), None)
-    if label_col is None:
-        print("[warn] cic_ids2018: 'Label' column not found, check actual header")
-        return []
+        device = data.get("device") or {}
+        if device.get("ip"):
+            iocs.add(f"ipv4:{device['ip']}")
+        if device.get("hostname"):
+            iocs.add(f"target:{device['hostname']}")
 
-    label_to_technique = {
-        "FTP-BruteForce": ("T1110", "Brute Force"),
-        "SSH-Bruteforce": ("T1110", "Brute Force"),
-        "DoS attacks-Hulk": ("T1498", "Network Denial of Service"),
-        "DoS attacks-GoldenEye": ("T1498", "Network Denial of Service"),
-        "DDoS attacks-LOIC-HTTP": ("T1498", "Network Denial of Service"),
-        "Bot": ("T1583", "Acquire Infrastructure"),
-        "Infilteration": ("T1210", "Exploitation of Remote Services"),
-    }
+        confidence = 0.96 if severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH] else 0.75
 
-    records = []
-    attacks_only = df[df[label_col] != "Benign"].head(500)
-    for i, row in attacks_only.iterrows():
-        scenario = pick_scenario(i)
-        label = str(row[label_col]).strip()
-        tid, tname = label_to_technique.get(label, (None, None))
-        records.append(make_record(
-            record_id=f"cicids-{i}",
-            source="cyber_sensor:cic_ids2018",
-            scenario=scenario,
-            technique_id=tid,
-            technique_name=tname,
-            description=f"Network flow labeled '{label}'",
-            confidence_hint="flow_label",
-            raw_ref=label,
-        ))
-    return records
+        return NormalizedStixEntity(
+            stix_id=f"stix-obs-{finding_uid.lower()}",
+            original_alert_id=finding_uid,
+            timestamp=str(timestamp),
+            domain=TelemetryDomain.OCSF_SECURITY,
+            entity_type="observed-data",
+            name=f"OCSF 2001 Finding [{title}]",
+            description=f"{title}: {finding_info.get('desc', raw_str[:200])}",
+            severity=severity,
+            confidence=confidence,
+            iocs=sorted(list(iocs)),
+            tactics_hint=data.get("metadata", {}).get("event_code", "OCSF_FINDING"),
+            raw_reference_hash=raw_hash
+        )
 
+    @classmethod
+    def normalize_cot(cls, cot: Union[str, Dict[str, Any], CoTTelemetry]) -> NormalizedStixEntity:
+        """Converts Cursor-on-Target (CoT) XML or JSON defense telemetry into a standard STIX 2.1 entity."""
+        if isinstance(cot, CoTTelemetry):
+            cot_dict = cot.model_dump()
+            raw_str = json.dumps(cot_dict, sort_keys=True)
+            uid = cot.uid
+            cot_type = cot.type
+            timestamp = cot.time
+            lat, lon = cot.lat, cot.lon
+            detail = cot.detail
+        elif isinstance(cot, dict):
+            cot_dict = cot
+            raw_str = json.dumps(cot_dict, sort_keys=True)
+            uid = cot_dict.get("uid", f"COT-{uuid.uuid4().hex[:6].upper()}")
+            cot_type = cot_dict.get("type", "a-u-G")
+            timestamp = cot_dict.get("time", "2026-09-15T12:00:00Z")
+            lat = float(cot_dict.get("lat", 0.0))
+            lon = float(cot_dict.get("lon", 0.0))
+            detail = cot_dict.get("detail", {})
+        elif isinstance(cot, str):
+            raw_str = cot.strip()
+            if raw_str.startswith("<"):
+                # Parse XML CoT
+                try:
+                    root = ET.fromstring(raw_str)
+                    uid = root.attrib.get("uid", f"COT-{uuid.uuid4().hex[:6].upper()}")
+                    cot_type = root.attrib.get("type", "a-u-G")
+                    timestamp = root.attrib.get("time", "2026-09-15T12:00:00Z")
+                    pt = root.find("point")
+                    lat = float(pt.attrib.get("lat", 0.0)) if pt is not None else 0.0
+                    lon = float(pt.attrib.get("lon", 0.0)) if pt is not None else 0.0
+                    detail = {}
+                    detail_el = root.find("detail")
+                    if detail_el is not None:
+                        for child in detail_el:
+                            detail[child.tag] = child.attrib
+                except Exception:
+                    uid = f"COT-{uuid.uuid4().hex[:6].upper()}"
+                    cot_type = "a-u-G"
+                    timestamp = "2026-09-15T12:00:00Z"
+                    lat, lon = 0.0, 0.0
+                    detail = {}
+            else:
+                cot_json = json.loads(raw_str)
+                return cls.normalize_cot(cot_json)
+        else:
+            raise ValueError(f"Unsupported CoT format: {type(cot)}")
 
-def adapt_kev():
-    path = SOURCES["cisa_kev"]["path"]
-    if not path.exists():
-        return []
-    data = json.loads(path.read_text())
-    vulns = data.get("vulnerabilities", [])[:100]  # trim for demo size
-    records = []
-    for i, v in enumerate(vulns):
-        scenario = pick_scenario(i)
-        records.append(make_record(
-            record_id=f"kev-{v.get('cveID', i)}",
-            source="intel_report:cisa_kev",
-            scenario=scenario,
-            description=f"{v.get('cveID')}: {v.get('vulnerabilityName', '')}",
-            confidence_hint="known_exploited",
-            raw_ref=v.get("cveID", ""),
-        ))
-    return records
+        raw_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
+        # Severity determined by MIL-STD-2525 type:
+        # a-h = hostile, a-f = friendly, a-u = unknown, a-n = neutral
+        is_hostile = cot_type.startswith("a-h") or "hostile" in str(detail).lower() or "jamming" in str(detail).lower()
+        is_compromised = "compromised" in str(detail).lower() or "breach" in str(detail).lower()
 
-def adapt_intel_pdfs():
-    """
-    Placeholder for manually-downloaded CISA/vendor advisory PDFs.
-    Drop PDFs into data/raw/intel_pdfs/ and list their headline technique
-    IDs + a one-line summary here (extracting structured text from PDFs
-    reliably needs a proper PDF-parsing step — out of scope for this
-    normalization pass, but the record shape is ready for it).
-    """
-    manual_entries = [
-        # (technique_id, technique_name, description, source_ref)
-        # Example — replace with what you actually pull from CISA advisories:
-        # ("T1071", "Application Layer Protocol",
-        #  "CISA AA24-xxx: C2 beaconing over HTTPS observed in campaign",
-        #  "CISA_AA24-xxx.pdf"),
-    ]
-    records = []
-    for i, (tid, tname, desc, ref) in enumerate(manual_entries):
-        scenario = pick_scenario(i)
-        records.append(make_record(
-            record_id=f"intelpdf-{i}",
-            source="intel_report:advisory_pdf",
-            scenario=scenario,
-            technique_id=tid,
-            technique_name=tname,
-            description=desc,
-            confidence_hint="intel_confirmed",
-            raw_ref=ref,
-        ))
-    return records
+        if is_hostile and is_compromised:
+            severity = SeverityLevel.CRITICAL
+        elif is_hostile:
+            severity = SeverityLevel.HIGH
+        elif cot_type.startswith("a-u"):
+            severity = SeverityLevel.MEDIUM
+        else:
+            severity = SeverityLevel.LOW
 
+        iocs = set(cls.extract_iocs(raw_str))
+        iocs.add(f"tactical-callsign:{uid}")
+        iocs.add(f"cot-type:{cot_type}")
+        if lat != 0.0 or lon != 0.0:
+            iocs.add(f"geo-pos:{round(lat, 4)},{round(lon, 4)}")
 
-# --------------------------------------------------------------------------
-# 5. Run everything, fuse, write out
-# --------------------------------------------------------------------------
+        confidence = 0.98 if is_hostile else 0.80
 
-def main():
-    random.seed(42)  # reproducible demo runs
+        return NormalizedStixEntity(
+            stix_id=f"stix-obs-{uid.lower()}",
+            original_alert_id=uid,
+            timestamp=str(timestamp),
+            domain=TelemetryDomain.TACTICAL_COT,
+            entity_type="observed-data",
+            name=f"CoT Tactical Track [{uid}]",
+            description=f"MIL-STD-2525 Track {uid} (Type: {cot_type}, Pos: {lat:.2f},{lon:.2f}). Detail: {str(detail)[:150]}",
+            severity=severity,
+            confidence=confidence,
+            iocs=sorted(list(iocs)),
+            tactics_hint=cot_type,
+            raw_reference_hash=raw_hash
+        )
 
-    print("== Downloading sources ==")
-    for name, spec in SOURCES.items():
-        try:
-            download(name, spec)
-        except Exception as e:
-            print(f"[error] {name}: {e}")
-
-    print("\n== Normalizing ==")
-    all_records = []
-    all_records += adapt_evtx_metadata()
-    all_records += adapt_splunk_attack_data()
-    all_records += adapt_telemanom()
-    all_records += simulate_satellite_events(n=25)
-    all_records += adapt_et_rules()
-    all_records += adapt_cic_ids2018()
-    all_records += adapt_kev()
-    all_records += adapt_intel_pdfs()
-
-    print(f"Total normalized records: {len(all_records)}")
-
-    all_records.sort(key=lambda r: r["timestamp"])
-
-    df_out = pd.DataFrame(all_records, columns=FUSED_COLUMNS)
-    csv_path = OUT_DIR / "fused_dataset.csv"
-    json_path = OUT_DIR / "fused_dataset.json"
-    df_out.to_csv(csv_path, index=False)
-    df_out.to_json(json_path, orient="records", indent=2)
-
-    print(f"\nWrote {csv_path} and {json_path}")
-    print("\nRecords per scenario campaign:")
-    print(df_out["scenario_campaign_id"].value_counts())
-    print("\nRecords per source:")
-    print(df_out["source"].value_counts())
-
-
-if __name__ == "__main__":
-    main()
+    @classmethod
+    def normalize_batch(cls, alerts: List[Union[RawTelemetryAlert, OCSFSecurityFinding, CoTTelemetry, Dict[str, Any]]]) -> List[NormalizedStixEntity]:
+        """Batch normalizes an incoming list of raw alerts, OCSF findings, or CoT tracks."""
+        normalized: List[NormalizedStixEntity] = []
+        for a in alerts:
+            if isinstance(a, NormalizedStixEntity):
+                normalized.append(a)
+            elif isinstance(a, RawTelemetryAlert):
+                normalized.append(cls.normalize_alert(a))
+            elif isinstance(a, OCSFSecurityFinding):
+                normalized.append(cls.normalize_ocsf(a))
+            elif isinstance(a, CoTTelemetry):
+                normalized.append(cls.normalize_cot(a))
+            elif isinstance(a, dict):
+                if "class_uid" in a or "finding_info" in a:
+                    normalized.append(cls.normalize_ocsf(a))
+                elif "lat" in a and ("lon" in a or "uid" in a):
+                    normalized.append(cls.normalize_cot(a))
+                elif "raw_payload" in a:
+                    normalized.append(cls.normalize_alert(RawTelemetryAlert(**a)))
+                else:
+                    # Generic alert dict
+                    normalized.append(cls.normalize_alert(RawTelemetryAlert(
+                        alert_id=a.get("alert_id", str(uuid.uuid4())),
+                        timestamp=a.get("timestamp", "2026-09-15T12:00:00Z"),
+                        domain=TelemetryDomain(a.get("domain", "cyber_siem")),
+                        source_name=a.get("source_name", "generic_siem"),
+                        raw_payload=json.dumps(a)
+                    )))
+            elif isinstance(a, str):
+                if a.strip().startswith("<event"):
+                    normalized.append(cls.normalize_cot(a))
+                else:
+                    try:
+                        parsed = json.loads(a)
+                        normalized.extend(cls.normalize_batch([parsed]))
+                    except Exception:
+                        pass
+        return normalized
