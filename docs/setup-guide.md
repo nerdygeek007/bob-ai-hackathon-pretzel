@@ -48,8 +48,13 @@ python -m venv .venv
 # On Linux / macOS:
 source .venv/bin/activate
 
-# 3. Install core dependencies
+# 3. Install backend dependencies
 pip install -r src/requirements.txt
+
+# 4. Install frontend dependencies
+cd src
+npm install
+cd ..
 ```
 
 ---
@@ -71,12 +76,22 @@ python -m src.cli --scenario benign --sector Sector-3-Central
 ```
 
 ### Option B: Tactical Commander War Room (Web Dashboard)
-Start the FastAPI REST backend and open the interactive dashboard:
+Start both the FastAPI REST backend and the React frontend simultaneously:
 
 ```powershell
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+.\run.bat
 ```
-Then navigate to: **`http://127.0.0.1:8000`**
+Then navigate to: **`http://localhost:5173`** for the UI, and **`http://127.0.0.1:8000`** for the API.
+
+To run them manually:
+```powershell
+# Terminal 1 (Backend)
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+
+# Terminal 2 (Frontend)
+cd src
+npm run dev
+```
 
 ### Option C: IBM Bob Model Context Protocol (MCP) Server
 To integrate ARES tools directly into IBM Bob:

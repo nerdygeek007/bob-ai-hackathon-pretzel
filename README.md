@@ -98,21 +98,30 @@ cd bob-ai-hackathon-pretzel
 # 2. Activate Python environment
 .\.venv\Scripts\Activate.ps1
 
-# 3. Install dependencies
+# 3. Install backend dependencies
 pip install -r src/requirements.txt
 
-# 4. Run automated test suite
+# 4. Install frontend dependencies
+cd src
+npm install
+cd ..
+
+# 5. Run automated test suite
 python -m pytest src/tests/ -v
 
-# 5. Run full 5-step pipeline in terminal (APT Hybrid or Real Satellite Ephemeris)
+# 6. Run full 5-step pipeline in terminal (APT Hybrid or Real Satellite Ephemeris)
 python -m src.cli --scenario apt_hybrid
 python -m src.cli --scenario real_ephemeris
 python -m src.cli --sat-catalog
 
-# 6. Launch Tactical Commander War Room UI
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+# 7. Launch Tactical Commander War Room UI & API
+# The easiest way is to use the provided batch script which starts both:
+run.bat
+
+# Alternatively, start them manually:
+# Backend: python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+# Frontend: cd src && npm run dev
 ```
-Open http://127.0.0.1:8000 in your browser.
 
 ---
 
