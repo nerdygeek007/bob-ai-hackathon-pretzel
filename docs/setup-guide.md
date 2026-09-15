@@ -1,79 +1,113 @@
-# Setup Guide
+# Setup & Installation Guide: ARES Defense Intelligence Platform
 
-> **This file is read by the automated evaluation pipeline. Be precise and complete.**
+> **This document contains verified, step-by-step instructions to install, test, and run ARES.**
+
+---
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+Ensure you have the following installed on your machine:
 
-- [ ] [e.g., Python 3.11+]
-- [ ] [e.g., Node.js 18+]
-- [ ] [e.g., Docker Desktop]
-- [ ] [e.g., An IBM Cloud account with watsonx.ai access]
+- Python 3.11 or Python 3.12 (`python --version`)
+- Git (`git --version`)
+- (Optional) IBM Bob CLI (`bob --version`)
+- (Optional) IBM Cloud account with watsonx.ai access (if running live cloud inference; local mode requires 0 credentials)
+
+---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values:
+Copy `.env.example` to `.env`:
 
 ```bash
-cp .env.example .env
+cp src/.env.example .env
 ```
 
-| Variable | Description | Required |
-|---|---|---|
-| `WATSONX_API_KEY` | Your IBM watsonx.ai API key | Yes |
-| `WATSONX_PROJECT_ID` | Your watsonx.ai project ID | Yes |
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SLACK_WEBHOOK_URL` | Slack webhook for alerts | No |
+| Variable | Description | Required | Default / Example |
+|---|---|---|---|
+| `WATSONX_API_KEY` | IBM watsonx.ai Cloud API key | Optional (uses local mode if unset) | `your_api_key_here` |
+| `WATSONX_PROJECT_ID` | watsonx.ai project ID | Optional | `your_project_id_here` |
+| `WATSONX_URL` | watsonx.ai endpoint URL | No | `https://us-south.ml.cloud.ibm.com` |
+| `APP_PORT` | Port for FastAPI REST backend | No | `8000` |
+| `APP_ENV` | Application environment mode | No | `development` |
+
+---
 
 ## Installation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/[your-org]/[your-repo].git
-cd [your-repo]
+git clone https://github.com/drijesh-ppatel/bob-ai-hackathon-pretzel.git
+cd bob-ai-hackathon-pretzel
 
-# 2. Install backend dependencies
-[your command — e.g.: pip install -r requirements.txt]
+# 2. Create and activate a Python virtual environment
+python -m venv .venv
 
-# 3. Install frontend dependencies (if applicable)
-[your command — e.g.: cd frontend && npm install]
+# On Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+# On Linux / macOS:
+source .venv/bin/activate
 
-# 4. Set up the database (if applicable)
-[your command — e.g.: python manage.py migrate]
+# 3. Install core dependencies
+pip install -r src/requirements.txt
 ```
+
+---
 
 ## Running the Application
 
-```bash
-# Start the backend
-[your command — e.g.: uvicorn app.main:app --reload]
+### Option A: Interactive Command Line Interface (CLI)
+Run the full 5-step threat intelligence pipeline directly in your terminal:
 
-# Start the frontend (in a separate terminal, if applicable)
-[your command — e.g.: cd frontend && npm run dev]
+```powershell
+# Scenario 1: Coordinated APT Hybrid Strike (Cyber + Satellite + SCADA)
+python -m src.cli --scenario apt_hybrid
+
+# Scenario 2: Adversarial Chaff & Alert Storm (Decoy Flooding)
+python -m src.cli --scenario chaff_flood --sector Sector-2-East
+
+# Scenario 3: Benign Background Baseline (Routine Maintenance)
+python -m src.cli --scenario benign --sector Sector-3-Central
 ```
 
-The application will be available at: `http://localhost:[PORT]`
+### Option B: Tactical Commander War Room (Web Dashboard)
+Start the FastAPI REST backend and open the interactive dashboard:
 
-## Running Tests
+```powershell
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+```
+Then navigate to: **`http://127.0.0.1:8000`**
 
-```bash
-[your test command — e.g.: pytest tests/ -v]
+### Option C: IBM Bob Model Context Protocol (MCP) Server
+To integrate ARES tools directly into IBM Bob:
+
+```powershell
+python -m src.mcp_server
 ```
 
-## Quick Demo (Optional)
+---
 
-If you have a demo script or sample data to showcase the project quickly:
+## Running Automated Tests
 
-```bash
-[e.g.: python demo/seed_demo_data.py]
-[e.g.: open http://localhost:8000/demo]
+Run the full automated test suite (10 unit & integration tests covering data ingestion, graph correlation, anti-chaff filtering, and REST endpoints):
+
+```powershell
+python -m pytest src/tests/ -v
 ```
+
+Run the quantitative precision & benchmark evaluator:
+
+```powershell
+python -m src.tests.benchmark_evaluator
+```
+
+---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|---|---|
-| [e.g., `ModuleNotFoundError`] | [e.g., Run `pip install -r requirements.txt` again] |
-| [e.g., Database connection refused] | [e.g., Ensure PostgreSQL is running: `docker compose up db`] |
-| [e.g., watsonx.ai 401 error] | [e.g., Check `WATSONX_API_KEY` in your `.env` file] |
+| Issue | Root Cause | Solution |
+|---|---|---|
+| `PSSecurityException: running scripts is disabled` | Windows PowerShell execution policy | Run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` in PowerShell. |
+| `ModuleNotFoundError: No module named 'fastapi'` | Virtual environment not activated | Activate `.venv` using `.\.venv\Scripts\Activate.ps1` or run via `.\.venv\Scripts\python.exe`. |
+| `watsonx 401 Unauthorized` | Invalid or expired IBM Cloud API key | Check `WATSONX_API_KEY` in `.env`. Leave empty to run in local zero-cost mode. |
+| Port 8000 already in use | Another process listening on port 8000 | Specify a custom port: `python -m uvicorn src.api:app --port 8080`. |

@@ -69,6 +69,7 @@ Cargo.lock  # remove this line if you want to commit lock file (recommended for 
 # ── Windows ───────────────────────────────────────────────────────────────────
 Thumbs.db
 desktop.ini
+.run.pid
 
 # ── IDEs & Editors ────────────────────────────────────────────────────────────
 .idea/
