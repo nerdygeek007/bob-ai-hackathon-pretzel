@@ -10,12 +10,37 @@ import json
 import requests
 from typing import Dict, Any, Optional
 
+import hashlib
+
 DEFAULT_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-4-h-small")
 DEFAULT_GUARDIAN_MODEL_ID = "ibm/granite-guardian-3.0-8b"
-DEFAULT_MAX_NEW_TOKENS = int(os.getenv("WATSONX_MAX_NEW_TOKENS", "160"))
+DEFAULT_MAX_NEW_TOKENS = int(os.getenv("WATSONX_MAX_NEW_TOKENS", "60"))
 
-# In-memory prompt cache to prevent redundant cloud token consumption
-_IN_MEMORY_AI_CACHE: Dict[str, str] = {}
+# Persistent on-disk prompt cache to preserve token budget across process restarts
+CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".cache"))
+CACHE_FILE = os.path.join(CACHE_DIR, "watsonx_cache.json")
+
+
+def _load_disk_cache() -> Dict[str, str]:
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_disk_cache(cache: Dict[str, str]):
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+_PERSISTENT_AI_CACHE: Dict[str, str] = _load_disk_cache()
 
 
 def _load_dotenv():
@@ -106,20 +131,25 @@ class WatsonxClient:
         system_prompt: str = "You are ARES, an elite Defense Cyber Intelligence AI Assistant powered by IBM Granite 3.0.",
         model_id: Optional[str] = None,
         max_tokens: Optional[int] = None,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        force_live: bool = False
     ) -> str:
-        """Generates text from Granite foundation model with prompt caching and token optimization."""
+        """Generates text from Granite foundation model with persistent disk caching and token budget guards."""
         target_model = model_id or self.model_id
         effective_max_tokens = max_tokens or DEFAULT_MAX_NEW_TOKENS
 
-        # Check in-memory cache to save 100% of tokens on repeated or identical queries
-        cache_key = f"{target_model}:{system_prompt}:{prompt}"
-        if cache_key in _IN_MEMORY_AI_CACHE:
-            return _IN_MEMORY_AI_CACHE[cache_key]
+        # 1. Check persistent on-disk cache to guarantee 0 tokens on repeated queries
+        cache_key = hashlib.sha256(f"{target_model}:{system_prompt}:{prompt}".encode("utf-8")).hexdigest()
+        if cache_key in _PERSISTENT_AI_CACHE:
+            return _PERSISTENT_AI_CACHE[cache_key]
 
-        if not self.is_live:
+        token_saver_active = os.getenv("ARES_TOKEN_SAVER_MODE", "true").lower() in ["true", "1", "yes"]
+
+        # If offline or if Token Saver Mode is active without explicit force_live, use deterministic engine
+        if not self.is_live or (token_saver_active and not force_live):
             res = self._local_fallback_generate(prompt, system_prompt)
-            _IN_MEMORY_AI_CACHE[cache_key] = res
+            _PERSISTENT_AI_CACHE[cache_key] = res
+            _save_disk_cache(_PERSISTENT_AI_CACHE)
             return res
 
         # Tier 1: Attempt direct IBM watsonx.ai REST generation if IAM API key is available
@@ -155,10 +185,11 @@ class WatsonxClient:
                         results = resp.json().get("results", [])
                         if results:
                             generated_txt = results[0].get("generated_text", "").strip()
-                            _IN_MEMORY_AI_CACHE[cache_key] = generated_txt
+                            _PERSISTENT_AI_CACHE[cache_key] = generated_txt
+                            _save_disk_cache(_PERSISTENT_AI_CACHE)
                             return generated_txt
                     else:
-                        print(f"[ARES-AI] watsonx.ai REST returned status {resp.status_code}. Profile status on dataplatform.cloud.ibm.com required.")
+                        print(f"[ARES-AI] watsonx.ai REST returned status {resp.status_code}.")
                 else:
                     print(f"[ARES-AI] IBM Cloud IAM returned status {token_resp.status_code}.")
             except Exception as e:
@@ -166,7 +197,8 @@ class WatsonxClient:
 
         # Tier 2: Graceful fallback to deterministic high-fidelity Granite reasoning
         res = self._local_fallback_generate(prompt, system_prompt)
-        _IN_MEMORY_AI_CACHE[cache_key] = res
+        _PERSISTENT_AI_CACHE[cache_key] = res
+        _save_disk_cache(_PERSISTENT_AI_CACHE)
         return res
 
     def verify_grounding_with_guardian(
