@@ -12,8 +12,8 @@
 |---|---|
 | **Team Name** | Pretzel |
 | **Track** | AI |
-| **Team Lead** | Chaitanya — chaitanya@pretzel.dev |
-| **Members** | Chaitanya |
+| **Team Lead** | Maharshi Trivedi — trivedimaharshim@gmail.com |
+| **Members** | Tirth Bhatt (bhatttirth18@gmail.com)<br>Chaitany Thakar (chatainythakar@gmail.com)<br>Visha Kardani (kardanivisha@gmail.com) |
 
 ---
 
