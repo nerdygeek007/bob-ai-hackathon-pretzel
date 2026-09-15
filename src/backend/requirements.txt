@@ -1,0 +1,21 @@
+# MITRE ATT&CK RAG Agent – Python dependencies
+# Install with: pip install -r requirements.txt
+
+# Web framework & server
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# Vector DB
+chromadb>=0.5.0
+
+# Sentence embeddings (used by ChromaDB's SentenceTransformerEmbeddingFunction)
+sentence-transformers>=2.7.0
+
+# HTTP client (watsonx.ai calls + MCP server)
+httpx>=0.27.0
+
+# Pydantic (FastAPI uses this internally; pinned for compat)
+pydantic>=2.7.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
