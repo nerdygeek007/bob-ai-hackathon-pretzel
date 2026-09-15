@@ -240,80 +240,103 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Progression index for sequence tracking
   const stageIndexRef = useRef<number>(0);
 
-  // Dynamic Simulator Pipeline Loop
+  
+  // Poll Backend API
   useEffect(() => {
     if (!simulatorRunning) return;
-
-    const intervalMs = Math.max(250, Math.floor(1000 / (simulatorRate / 10)));
-
-    const timer = setInterval(() => {
-      // 1. Generate new event & process through pipeline
-      const cycleResult = simulatorEngine.generateEvent(selectedScenario, stageIndexRef.current++);
-      const { simEvent, newAlert, updatedIncident } = cycleResult;
-
-      // 2. Prepend event to Live Ingestion Stream buffer
-      setSimulatorEvents((prev) => [simEvent, ...prev.slice(0, 49)]);
-
-      // 3. Increment Events Processed dynamically
-      const deltaEvents = Math.floor(simulatorRate / 5) + 1;
-      setTotalEventsProcessed((prev) => prev + deltaEvents);
-
-      // 4. Update Events/Sec dynamically based on generation rate + realistic ingress load
-      const baseLoad = simulatorRate === 100 ? 1620 : simulatorRate === 50 ? 1280 : 940;
-      const jitter = Math.floor(Math.random() * 48) - 24;
-      setEventsPerSec(baseLoad + jitter);
-
-      // 5. Update Latency
-      setProcessingLatencyMs(78 + Math.floor(Math.random() * 12));
-
-      // 6. Handle Alerts & Incidents
-      if (newAlert) {
-        setAlerts((prev) => {
-          // Avoid duplicate by alertId
-          const existingIndex = prev.findIndex((a) => a.alertId === newAlert.alertId);
-          if (existingIndex >= 0) {
-            const updated = [...prev];
-            updated[existingIndex] = { ...updated[existingIndex], ...newAlert };
-            return updated;
-          }
-          return [newAlert, ...prev];
+    
+    const pollApi = async () => {
+      try {
+        await fetch('http://127.0.0.1:8000/api/ingest', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ scenario: selectedScenario, sector: "Sector-4-North", clear_session: false })
         });
-
-        // Update alerts/sec when attack scenario produces alerts
-        const baseAlertsPerSec = selectedScenario === 'normal' ? 0 : Math.floor(Math.random() * 6) + 8;
-        setAlertsPerSec(baseAlertsPerSec);
-      } else {
-        // Normal traffic or no new alert in this cycle
-        if (selectedScenario === 'normal') {
-          setAlertsPerSec(0);
-        } else {
-          setAlertsPerSec((prev) => Math.max(2, Math.floor(prev * 0.95)));
+        await fetch('http://127.0.0.1:8000/api/correlate?sector=Sector-4-North', { method: 'POST' });
+        
+        const alertsRes = await fetch('http://127.0.0.1:8000/api/alerts');
+        const alertsData = await alertsRes.json();
+        
+        if (alertsData.alerts && alertsData.alerts.length > 0) {
+            const mappedAlerts = alertsData.alerts.map((a: any) => ({
+                alertId: a.alert_id,
+                timestamp: a.timestamp,
+                title: 'Detected ' + a.domain + ' Anomaly',
+                eventType: 'Telemetry Event',
+                attackBehavior: 'Suspicious Activity',
+                domain: a.domain.includes('siem') ? 'SIEM' : (a.domain.includes('satellite') ? 'SATELLITE' : 'SENSORS'),
+                sourceId: a.domain,
+                sourceName: a.source_name,
+                asset: a.target_entity || a.sector || 'Unknown Asset',
+                indicator: a.raw_payload.substring(0, 50) + '...',
+                sourceSeverity: 'MEDIUM',
+                priority: 'HIGH',
+                priorityReason: 'Detected by backend STIX normalizer',
+                confidence: 85,
+                behavioralMatch: 'Correlated via spatio-temporal graph',
+                mitreId: 'T1000',
+                mitreName: 'Detected Activity',
+                mitreTactic: 'Unknown',
+                mitreDescription: 'Automatically parsed by ARES pipeline',
+                whatHappened: a.raw_payload,
+                evidenceTimeline: [{ time: a.timestamp, event: 'Alert Ingested', source: a.source_name, detail: 'Raw processing' }],
+                recommendedAction: 'Review incident clusters for wargamed COAs',
+                correlationStatus: 'CORRELATED',
+                status: 'New',
+                rawReference: `backend://${a.alert_id}`
+            }));
+            setAlerts(mappedAlerts);
         }
-      }
 
-      // 7. Update Incidents when correlated events form or advance an incident
-      if (updatedIncident) {
-        setIncidents((prev) =>
-          prev.map((inc) => {
-            if (inc.incidentId === 'INC-1042') {
-              const newAlertIds = newAlert
-                ? Array.from(new Set([newAlert.alertId, ...inc.correlatedAlertIds]))
-                : inc.correlatedAlertIds;
-
-              return {
-                ...inc,
-                ...updatedIncident,
-                correlatedAlertIds: newAlertIds,
-              };
+        const clustersRes = await fetch('http://127.0.0.1:8000/api/clusters');
+        const clustersData = await clustersRes.json();
+        
+        if (clustersData.clusters && clustersData.clusters.length > 0) {
+            const mappedIncidents = clustersData.clusters.map((c: any) => ({
+                incidentId: c.cluster_id,
+                title: 'Hybrid Cluster: ' + c.cluster_id,
+                status: 'INVESTIGATING',
+                priority: c.overall_severity,
+                sentinelPriority: c.overall_severity,
+                riskScore: Math.round(c.bayesian_threat_confidence * 100),
+                severity: c.overall_severity,
+                firstSeen: c.created_at,
+                lastSeen: c.created_at,
+                description: 'Multi-domain threat spanning ' + c.domains_involved.join(', '),
+                primaryThreatActor: c.primary_threat_actor,
+                mitreTactics: c.mitre_techniques.map((t: any) => t.tactic),
+                affectedAssets: c.alerts.map((a: any) => a.name),
+                domainsInvolved: c.domains_involved.map((d: string) => d.includes('siem') ? 'SIEM' : (d.includes('satellite') ? 'SATELLITE' : 'SENSORS')),
+                correlatedAlertIds: c.alerts.map((a: any) => a.original_alert_id),
+                riskFactors: {
+                    evidenceStrength: 90,
+                    assetCriticality: 85,
+                    correlationStrength: c.bayesian_threat_confidence * 100,
+                    threatIntelConfidence: c.attribution_confidence * 100,
+                    temporalCorrelation: 95
+                },
+                timeline: c.mitre_techniques.map((t: any) => ({
+                    time: c.created_at,
+                    stage: t.tactic,
+                    description: t.name,
+                    source: 'MITRE Correlation Engine',
+                    mitre: t.technique_id
+                }))
+            }));
+            setIncidents(mappedIncidents);
+            if (mappedIncidents.length > 0) {
+               setSelectedIncidentId(mappedIncidents[0].incidentId);
             }
-            return inc;
-          })
-        );
+        }
+      } catch (err) {
+        console.error("Backend fetch error:", err);
       }
-    }, intervalMs);
+    };
 
+    const timer = setInterval(pollApi, 2000);
     return () => clearInterval(timer);
-  }, [simulatorRunning, simulatorRate, selectedScenario]);
+  }, [simulatorRunning, selectedScenario]);
+
 
   // Actions
   const startSimulator = () => setSimulatorRunning(true);
