@@ -83,8 +83,30 @@ export interface Alert {
   asset?: string;
   indicator?: string;
   eventType?: string;
+  title?: string;
+  attackBehavior?: string;
   sourceSeverity?: SeverityLevel;
-  confidence?: number; // 0–100
+  priority?: PriorityLevel; // Sentinel-X computed priority
+  confidence?: number; // 0–100 (detection confidence)
+  correlationConfidence?: number; // 0–100
+  behavioralMatch?: string;
+  mitreId?: string;
+  mitreName?: string;
+  mitreTactic?: string;
+  mitreDescription?: string;
+  whatHappened?: string;
+  whyPrioritized?: string[];
+  priorityReason?: string;
+  recommendedAction?: string;
+  status?: 'New' | 'Investigating' | 'Resolved' | 'False Positive';
+  evidenceTimeline?: { time: string; event: string; source: string; detail: string }[];
+  telemetryDetail?: {
+    parameter: string;
+    observed: number;
+    expected: number;
+    deviation: string;
+    isAnomaly: boolean;
+  };
   correlationStatus: CorrelationStatus;
   relatedIncidentId?: string;
 
@@ -139,12 +161,14 @@ export interface CorroborationEvidence {
 
 export interface Incident {
   incidentId: string;
+  title?: string;
   priority: PriorityLevel;
   riskScore: number; // 0–100
   confidence: number; // 0–100
   dataCompleteness: number; // 0–100
 
   affectedAsset: string;
+  affectedAssets?: string[];
   evidenceDomains: DomainType[];
   correlatedAlertIds: string[];
   mitreIds: string[];
@@ -165,6 +189,13 @@ export interface Incident {
   sourceSeverities: { source: string; severity: SeverityLevel | null }[];
 
   blufSummary?: string;
+  timeline?: {
+    time: string;
+    stage: string;
+    description: string;
+    source: string;
+    mitre?: string;
+  }[];
 }
 
 // ============================================================

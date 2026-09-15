@@ -12,40 +12,35 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
 }) => {
   const config = {
     OPERATIONAL: {
-      color: 'bg-emerald-400',
-      textColor: 'text-emerald-400',
-      label: 'OPERATIONAL',
-      icon: '●',
+      color: 'bg-emerald-500',
+      textColor: 'text-emerald-700',
+      label: 'Connected',
     },
     DEGRADED: {
-      color: 'bg-amber-400',
-      textColor: 'text-amber-400',
-      label: 'DEGRADED',
-      icon: '◐',
+      color: 'bg-amber-500',
+      textColor: 'text-amber-700',
+      label: 'Degraded',
     },
     ERROR: {
-      color: 'bg-red-400',
-      textColor: 'text-red-400',
-      label: 'ERROR',
-      icon: '▲',
+      color: 'bg-red-500',
+      textColor: 'text-red-700',
+      label: 'Error',
     },
     DISABLED: {
-      color: 'bg-slate-500',
-      textColor: 'text-slate-500',
-      label: 'DISABLED',
-      icon: '○',
+      color: 'bg-neutral-400',
+      textColor: 'text-neutral-500',
+      label: 'Disabled',
     },
   }[status] || {
-    color: 'bg-slate-500',
-    textColor: 'text-slate-500',
-    label: 'UNKNOWN',
-    icon: '○',
+    color: 'bg-neutral-400',
+    textColor: 'text-neutral-500',
+    label: 'Unknown',
   };
 
   return (
-    <div className="inline-flex items-center gap-1.5 font-mono text-xs">
-      <span className={`w-2 h-2 rounded-full ${config.color} ${status === 'OPERATIONAL' ? 'shadow-[0_0_8px_rgba(52,211,153,0.8)]' : ''}`} />
-      {showLabel && <span className={`font-semibold tracking-wider ${config.textColor}`}>{config.label}</span>}
+    <div className="inline-flex items-center gap-1.5 text-xs">
+      <span className={`w-2 h-2 rounded-full ${config.color} ${status === 'OPERATIONAL' ? 'animate-pulse-subtle' : ''}`} />
+      {showLabel && <span className={`font-medium ${config.textColor}`}>{config.label}</span>}
     </div>
   );
 };

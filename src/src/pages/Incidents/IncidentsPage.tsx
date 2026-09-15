@@ -3,10 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useSentinel } from '../../store/sentinelStore';
 import { Card } from '../../components/ui/Card';
 import { SeverityBadge } from '../../components/ui/SeverityBadge';
-import { RiskGauge } from '../../components/ui/RiskGauge';
-import { ConfidenceMeter } from '../../components/ui/ConfidenceMeter';
 import { Incident } from '../../types';
-import { ShieldCheck, ShieldAlert, AlertTriangle, ArrowRight, Layers, FileText } from 'lucide-react';
+import {
+  ArrowRight,
+  ShieldAlert,
+  Radio,
+  Clock,
+  Layers,
+  ChevronRight,
+  AlertTriangle,
+} from 'lucide-react';
 
 export const IncidentsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,168 +23,141 @@ export const IncidentsPage: React.FC = () => {
     navigate(`/incidents/${incidentId}`);
   };
 
-  const getAssessmentBadge = (inc: Incident) => {
-    if (inc.threatAssessment === 'LIKELY_THREAT') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-red-950/80 text-red-400 border border-red-800">
-          <ShieldAlert className="w-3.5 h-3.5" /> LIKELY THREAT
-        </span>
-      );
-    }
-    if (inc.threatAssessment === 'LIKELY_FALSE_POSITIVE') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800">
-          <ShieldCheck className="w-3.5 h-3.5" /> LIKELY FALSE POSITIVE
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-amber-950/80 text-amber-400 border border-amber-800">
-        <AlertTriangle className="w-3.5 h-3.5" /> REQUIRES INVESTIGATION
-      </span>
-    );
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-6 pb-12">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold font-mono text-slate-100 uppercase tracking-wide">
-            CORRELATED INCIDENTS
+          <h1 className="text-2xl font-bold tracking-tight text-[#171717]">
+            Correlated Incidents
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Explainable multi-source incident clusters with false positive triage and risk attribution
+          <p className="text-sm text-[#737373] mt-0.5">
+            Multi-stage attack chains correlated across independent security domains
           </p>
+        </div>
+        <div className="text-xs text-[#737373]">
+          <span className="font-medium text-[#171717]">{incidents.length}</span> active incidents under observation
         </div>
       </div>
 
-      {/* Incidents Grid */}
-      <div className="grid grid-cols-1 gap-5">
-        {incidents.map((inc) => (
-          <div
-            key={inc.incidentId}
-            className="bg-[#111827] border border-[#1f293d] hover:border-slate-600 rounded-sm p-5 shadow-lg transition-all duration-200"
-          >
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-4 border-b border-[#1f293d]">
-              {/* Left meta */}
-              <div className="flex items-start gap-4">
-                <RiskGauge score={inc.riskScore} size={84} />
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="text-base font-black font-mono text-cyan-400">
-                      {inc.incidentId}
+      {/* Incidents List (Clean Cards, not overwhelming charts) */}
+      <div className="space-y-4">
+        {incidents.map((inc) => {
+          const isSatelliteAnomaly = inc.incidentId === 'INC-1043';
+
+          return (
+            <div
+              key={inc.incidentId}
+              onClick={() => handleOpenDetail(inc.incidentId)}
+              className="bg-white border border-[#e5e5e5] hover:border-neutral-300 rounded-xl p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all cursor-pointer group"
+            >
+              {/* Header row: ID, Title, Status, Priority, Risk Score */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#e5e5e5]">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-[#f5f5f5] text-[#171717] shrink-0 border border-[#e5e5e5]">
+                    {isSatelliteAnomaly ? (
+                      <Radio className="w-5 h-5 text-blue-600" />
+                    ) : (
+                      <Layers className="w-5 h-5 text-blue-600" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-xs text-[#171717] bg-[#f5f5f5] px-2 py-0.5 rounded-md border border-[#e5e5e5]">
+                        {inc.incidentId}
+                      </span>
+                      <h2 className="text-base font-bold text-[#171717] group-hover:text-blue-600 transition-colors">
+                        {inc.title}
+                      </h2>
+                      <SeverityBadge severity={inc.priority} size="sm" variant="sentinel" />
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f5f5f5] text-[#737373] border border-[#e5e5e5]">
+                        {inc.status}
+                      </span>
+                    </div>
+
+                    {/* Metadata line: Target assets & related telemetry */}
+                    <div className="flex items-center gap-3 text-xs text-[#737373] mt-1.5 flex-wrap">
+                      <span>
+                        Asset: <strong className="text-[#171717] font-mono">{inc.affectedAsset}</strong>
+                        {inc.affectedAssets && inc.affectedAssets.length > 1 && (
+                          <span className="text-[#737373]"> (+{inc.affectedAssets.length - 1} secondary)</span>
+                        )}
+                      </span>
+                      <span>•</span>
+                      <span>{inc.correlatedAlertIds.length} related alerts</span>
+                      <span>•</span>
+                      <span>{inc.mitreIds.length} MITRE techniques</span>
+                      <span>•</span>
+                      <span>Confidence: <strong className="text-[#171717] font-mono">{inc.confidence}%</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Risk Score & Action */}
+                <div className="flex items-center gap-4 self-end lg:self-center">
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-medium tracking-wider text-[#737373] block">
+                      Assessed Risk
                     </span>
-                    <SeverityBadge severity={inc.priority} size="md" variant="sentinel" />
-                    {getAssessmentBadge(inc)}
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                      Status: {inc.status}
-                    </span>
+                    <div className="flex items-baseline gap-1 font-mono">
+                      <span className="text-xl font-bold text-[#171717]">{inc.riskScore}</span>
+                      <span className="text-xs text-[#737373]">/ 100</span>
+                    </div>
                   </div>
 
-                  <h3 className="text-sm font-semibold text-slate-200 mt-2 font-mono">
-                    Target Asset:{' '}
-                    <span className="text-slate-100 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                      {inc.affectedAsset}
-                    </span>
-                  </h3>
-
-                  <p className="text-xs text-slate-400 mt-1 max-w-2xl line-clamp-2">
-                    {inc.blufSummary}
-                  </p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenDetail(inc.incidentId);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-[#000000] text-white hover:bg-neutral-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    View Details <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex items-center gap-3 self-end lg:self-center">
-                <button
-                  onClick={() => {
-                    setSelectedIncidentId(inc.incidentId);
-                    navigate('/bluf');
-                  }}
-                  className="px-3 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-semibold flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
-                >
-                  <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                  BLUF Report
-                </button>
+              {/* Summary description */}
+              <p className="text-xs text-[#737373] my-3 leading-relaxed">
+                {inc.blufSummary}
+              </p>
 
-                <button
-                  onClick={() => handleOpenDetail(inc.incidentId)}
-                  className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-cyan-950"
-                >
-                  Investigate Incident <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {/* Attack Stage Timeline (Section 14) */}
+              {inc.timeline && inc.timeline.length > 0 && (
+                <div className="pt-3 border-t border-[#e5e5e5]">
+                  <span className="text-[11px] font-semibold text-[#737373] uppercase tracking-wider block mb-2">
+                    Attack Progression Timeline
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {inc.timeline.map((step, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2.5 rounded-lg bg-[#f9fafb] border border-[#e5e5e5] text-xs flex flex-col justify-between"
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-mono text-xs font-bold text-[#171717]">
+                            {step.time}
+                          </span>
+                          {step.mitre && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white text-[#737373] border border-[#e5e5e5]">
+                              {step.mitre}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-medium text-[#171717] block">
+                          {step.stage}
+                        </span>
+                        <span className="text-[11px] text-[#737373] mt-1 line-clamp-2">
+                          {step.description}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-
-            {/* Bottom details strip */}
-            <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
-              {/* Evidence Domains */}
-              <div className="p-2.5 bg-slate-900/60 rounded border border-slate-800">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
-                  Evidence Streams ({inc.evidenceDomains.length})
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {inc.evidenceDomains.map((dom) => (
-                    <span
-                      key={dom}
-                      className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700 font-bold"
-                    >
-                      {dom.replace('_', ' / ')}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Correlated Alerts count */}
-              <div className="p-2.5 bg-slate-900/60 rounded border border-slate-800">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
-                  Correlated Alerts
-                </span>
-                <span className="font-bold text-slate-200 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                  {inc.correlatedAlertIds.length} telemetry records
-                </span>
-              </div>
-
-              {/* Confidence & Completeness (Separated) */}
-              <div className="p-2.5 bg-slate-900/60 rounded border border-slate-800 space-y-1.5">
-                <ConfidenceMeter value={inc.confidence} label="Assessment Confidence" size="sm" />
-                <ConfidenceMeter
-                  value={inc.dataCompleteness}
-                  label="Data Completeness"
-                  type="completeness"
-                  size="sm"
-                />
-              </div>
-
-              {/* MITRE Mapping */}
-              <div className="p-2.5 bg-slate-900/60 rounded border border-slate-800">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
-                  MITRE ATT&CK ({inc.mitreIds.length})
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {inc.mitreIds.map((tid) => (
-                    <span
-                      key={tid}
-                      className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-950/60 text-cyan-400 border border-cyan-800 font-semibold"
-                    >
-                      {tid}
-                    </span>
-                  ))}
-                  {inc.cveIds?.map((cve) => (
-                    <span
-                      key={cve}
-                      className="px-1.5 py-0.5 rounded text-[10px] bg-red-950/60 text-red-400 border border-red-800 font-semibold"
-                    >
-                      {cve}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

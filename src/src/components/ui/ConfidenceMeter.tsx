@@ -17,35 +17,35 @@ export const ConfidenceMeter: React.FC<MetricMeterProps> = ({
 }) => {
   const getBarColor = () => {
     if (type === 'risk') {
-      if (value >= 85) return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]';
+      if (value >= 85) return 'bg-red-500';
       if (value >= 65) return 'bg-orange-500';
       if (value >= 40) return 'bg-amber-500';
       return 'bg-emerald-500';
     }
     if (type === 'completeness') {
-      return 'bg-blue-400';
+      return 'bg-neutral-600';
     }
     // confidence
-    if (value >= 80) return 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.4)]';
-    if (value >= 50) return 'bg-sky-500';
-    return 'bg-slate-500';
+    if (value >= 80) return 'bg-blue-600';
+    if (value >= 50) return 'bg-blue-400';
+    return 'bg-neutral-400';
   };
 
   const height = size === 'sm' ? 'h-1.5' : 'h-2';
 
   return (
-    <div className="flex flex-col gap-1 w-full font-mono">
+    <div className="flex flex-col gap-1.5 w-full">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-slate-400 text-[11px] uppercase tracking-wider">{label}</span>
+        <span className="text-[#737373] text-[11px] font-medium">{label}</span>
         {showPercent && (
-          <span className="font-bold text-slate-200">
+          <span className="font-semibold text-[#171717] font-mono text-xs">
             {value}%
           </span>
         )}
       </div>
-      <div className={`w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700/50 ${height}`}>
+      <div className={`w-full bg-[#f5f5f5] rounded-full overflow-hidden border border-[#e5e5e5] ${height}`}>
         <div
-          className={`h-full transition-all duration-500 rounded-full ${getBarColor()}`}
+          className={`h-full transition-all duration-300 rounded-full ${getBarColor()}`}
           style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
         />
       </div>
