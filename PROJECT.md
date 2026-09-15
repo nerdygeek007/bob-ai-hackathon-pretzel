@@ -135,8 +135,8 @@ All operations can be executed with 1-click batch scripts:
 
 ---
 
-## 6. Recent Changes Log
-- **2026-09-15**: Integrated live IBM Bob (`BOB_API_KEY`) and IBM Cloud watsonx.ai (`WATSONX_API_KEY` + `WATSONX_PROJECT_ID`), verified Bobcoin consumption across 5 cloud tasks, added `test_bob_live.bat` and `test_watsonx_live.bat`.
+- **2026-09-15**: Connected and verified live **IBM watsonx.ai Foundation Models** in `eu-de` (Frankfurt) using `ibm/granite-4-h-small` and project `793d5a80-258a-4de1-b962-6f8c2a8987fa`, achieving 100% live cloud text generation with zero fallback errors.
+- **2026-09-15**: Integrated live IBM Bob (`BOB_API_KEY`) and IBM Cloud watsonx.ai (`WATSONX_API_KEY`), verified Bobcoin consumption across 5 cloud tasks, added `test_bob_live.bat` and `test_watsonx_live.bat`.
 - **2026-09-15**: Built multi-tier AI routing (`watsonx_client.py`) with automatic fallback to live Bob agent and local deterministic Granite engine.
 - **2026-09-15**: Added Custom Alert testing support: `--file`, `--interactive`, `--scenario custom`, `test_custom.bat`, `src/data/sample_custom_alerts.json`, and UI modal injector.
 - **2026-09-15**: Added 1-click batch launcher scripts (`run.bat`, `stop.bat`, `restart.bat`, `test.bat`) adhering to `project-run` skill.
