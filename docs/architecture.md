@@ -2,48 +2,43 @@
 
 ## System Architecture
 
-[Describe the overall architecture of your system. Replace the Mermaid diagram below with your actual architecture.]
+Sentinel-X is organized into an event streaming and correlation architecture that processes multi-domain data sources and visualizes threat intelligence via a responsive SaaS frontend.
 
 ```mermaid
 graph TD
-    A[User / Browser] -->|HTTP| B[Frontend - React]
-    B -->|REST API| C[Backend - FastAPI]
-    C -->|SDK| D[watsonx.ai]
-    C -->|Query| E[PostgreSQL]
-    C -->|Publish| F[Slack Webhook]
-    D -->|Inference Result| C
+    A1["SIEM Logs (Mordor, Sysmon, EVTX)"] --> B["Canonical Ingestion Layer"]
+    A2["Satellite Telemetry (NASA JPL, ESA OPS-SAT)"] --> B
+    A3["Sensor Feeds (Network, Endpoint)"] --> B
+    B --> C["Temporal & Asset Correlation Engine"]
+    C --> D["MITRE ATT&CK Mapping & Enrichment"]
+    D --> E["Explainable Risk & Discrepancy Scorer"]
+    E --> F["Sentinel-X State Store (React Context)"]
+    F --> G["Overview Dashboard & Recharts"]
+    F --> H["Alerts Table & Slide-Over Drawer"]
+    F --> I["Incidents Progression Timeline & BLUF"]
+    F --> J["Live Simulation Engine"]
 ```
 
 ## Components
 
 | Component | Technology | Responsibility |
 |---|---|---|
-| Frontend | [e.g., React 18] | [e.g., Dashboard UI, user interaction] |
-| Backend API | [e.g., FastAPI] | [e.g., Business logic, orchestration] |
-| AI / ML | [e.g., watsonx.ai] | [e.g., Anomaly scoring, classification] |
-| Database | [e.g., PostgreSQL] | [e.g., Storing pipeline events and scores] |
-| Notifications | [e.g., Slack API] | [e.g., Alerting on threshold breaches] |
+| Frontend UI | React 19, Tailwind CSS v4, Lucide | Responsive SaaS dashboard, alert triage table, and slide-overs |
+| Analytics & Charts | Recharts 3 | Threat activity timeline, priority distribution, telemetry curves |
+| Correlation Engine | TypeScript / State Engine | Multi-source event grouping, asset mapping, temporal windowing |
+| Intelligence Enrichment | MITRE ATT&CK Enterprise Matrix | Tactic and technique mapping with detection signatures |
+| Simulation Engine | React Custom Hooks & Timers | Real-time synthetic event generation with rate throttling |
+| Edge Hosting | Netlify Edge CDN & SPA Rewrites | High-availability global deployment and instant client routing |
 
 ## Data Flow
 
-[Describe how data moves through your system from input to output.]
+1. **Ingestion:** Security events are received from SIEM, space telemetry, or synthetic simulator.
+2. **Normalization:** Events are mapped to canonical fields (`timestamp`, `sourceId`, `asset`, `indicator`, `eventType`, `domain`).
+3. **Correlation:** Events affecting identical assets (`HOST-042`) within the 15-minute window are linked into incident campaigns.
+4. **Behavioral Mapping:** Event signatures are tagged with MITRE ATT&CK technique IDs (e.g. `T1059.001`).
+5. **Risk Assessment:** The scoring engine computes a 0-100 risk score, identifies discrepancy with source severity, and produces actionable triage recommendations.
 
-1. [e.g., Pipeline logs are ingested via a webhook from GitHub Actions]
-2. [e.g., Logs are preprocessed and chunked into 512-token segments]
-3. [e.g., Each chunk is sent to the watsonx.ai inference endpoint]
-4. [e.g., Anomaly scores are stored in PostgreSQL]
-5. [e.g., The React dashboard polls the API every 30 seconds to refresh]
+## Security & Operational Policy
 
-## Security Considerations
-
-[Note any security decisions relevant to the architecture — even if basic.]
-
-- [e.g., API keys stored in environment variables, never committed to git]
-- [e.g., All API routes require a Bearer token]
-- [e.g., Database credentials rotated via IBM Secrets Manager]
-
-## Scalability Notes
-
-[Optional: how would this scale beyond the hackathon prototype?]
-
-[e.g., "The FastAPI backend is stateless and could be horizontally scaled behind a load balancer. The watsonx.ai calls are the bottleneck and would benefit from request batching."]
+- **Operational Telemetry Isolation:** Satellite telemetry deviations are tracked as operational telemetry anomalies and strictly isolated from cyberattack alerts unless corroborated by cyber indicators.
+- **Client Security:** All state is handled in-memory without persistent local credential exposure; SPA redirect rules enforce clean routing.

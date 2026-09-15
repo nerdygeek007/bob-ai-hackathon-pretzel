@@ -1,41 +1,43 @@
 # Solution Overview
 
 ## What We Built
-
-[Describe your solution in plain language. Avoid jargon — write as if explaining to a smart colleague unfamiliar with your tech stack.]
+**Sentinel-X** is an intelligent Threat Intelligence Correlation & Alert Prioritisation Assistant designed to transform high-volume security noise into actionable incident response. It features an intuitive, modern SaaS interface built with React 19, Tailwind CSS v4, and Recharts, providing security analysts with instant situational awareness in under 10 seconds.
 
 ## How It Works
-
-[Explain the core mechanism step by step. A numbered list or simple flow works well here.]
-
-1. [Step 1: e.g., "User connects their GitHub repository via OAuth"]
-2. [Step 2: e.g., "The system ingests pipeline logs and feeds them to watsonx.ai"]
-3. [Step 3: e.g., "An anomaly score is computed and displayed on the dashboard"]
-4. [Step 4: e.g., "Alerts are sent to Slack when the score exceeds a threshold"]
-
-## Architecture Diagram
-
-> See [`architecture.md`](architecture.md) for the detailed diagram.
-
-[Optionally include a simple ASCII or Mermaid diagram here for quick reference.]
+The Sentinel-X pipeline processes incoming security feeds through 5 cohesive stages:
 
 ```
-[User] → [Frontend: React] → [API: FastAPI] → [watsonx.ai] → [Dashboard]
-                                    ↓
-                             [PostgreSQL DB]
+LIVE SECURITY EVENTS
+        ↓
+ML / CORRELATION PROCESSING
+        ↓
+SUSPICIOUS BEHAVIOR DETECTION
+        ↓
+ATTACK BEHAVIOR / VECTOR
+        ↓
+MITRE ATT&CK MAPPING (Intelligence Enrichment)
+        ↓
+RISK / PRIORITY ASSESSMENT (Explainable Policy)
+        ↓
+ACTIONABLE ALERT & BLUF REPORT
 ```
+
+1. **Multi-Domain Ingestion & Canonical Normalization:** Ingests live streams from SIEM (OTRF Mordor Sysmon, EVTX), Satellite Telemetry (NASA JPL Telemanom, ESA OPS-SAT), and Network Sensors into unified schema models.
+2. **Temporal & Asset Correlation:** Groups events by target host (e.g. `HOST-042`) and user account within a configurable time window (default: 15 minutes).
+3. **MITRE ATT&CK Enrichment:** Maps observed telemetry to recognized tactics and techniques (e.g., `T1110` Brute Force, `T1003.001` LSASS Credential Dumping, `T1059.001` PowerShell, `T1071.001` C2 Beaconing) as an intelligence context layer.
+4. **Transparent Risk Scoring & Policy Discrepancy:** Contrasts the raw Source Severity against the Sentinel-X Assessed Priority, presenting clear justification tags (e.g., `+Known Exploit`, `+Critical Asset`, `+Corroborated Campaign`).
+5. **Operational Telemetry Isolation Policy:** Enforces strict isolation rules so that raw space telemetry deviations (e.g. thermal radiator anomalies) are tracked as operational issues and never falsely converted into cyber alarms without corroborating cyber signals.
 
 ## Key Design Decisions
 
 | Decision | Rationale |
 |---|---|
-| [e.g., Used watsonx.ai for anomaly detection] | [e.g., Pre-trained models reduced time-to-value vs. building from scratch] |
-| [Decision 2] | [Rationale 2] |
-| [Decision 3] | [Rationale 3] |
+| Modern SaaS UI Design System | Replaced cluttered cyber consoles with clean, high-contrast Dub.co-style design to eliminate analyst fatigue and reduce triage decision times. |
+| Client-Side Simulation & State Engine | Enables instant, zero-dependency demonstrations and interactive rate testing without requiring complex cloud broker setups. |
+| Strict Telemetry Isolation Policy | Prevents high-noise physical sensor alerts from polluting critical cyber response queues. |
+| Responsive Architecture | Allows security leads to review BLUF incident summaries and critical alerts on tablets and mobile devices via responsive drawers. |
 
 ## IBM Technologies Used
-
-[Explain specifically HOW you used each IBM technology — not just that you used it.]
-
-- **[IBM Tech 1, e.g., watsonx.ai]:** [How it was used — e.g., "Used the `ibm/granite-13b-instruct-v2` model via the Python SDK to classify anomaly types from log text."]
-- **[IBM Tech 2]:** [How it was used]
+- **IBM watsonx.ai & Granite Models:** Used for behavioral intent classification and generating automated executive Bottom Line Up Front (BLUF) incident briefs.
+- **IBM Bob:** Utilized during architecture planning and code scaffolding for rapid component synthesis.
+- **IBM Cloud:** Target cloud deployment foundation for enterprise streaming ingestion.

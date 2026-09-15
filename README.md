@@ -1,6 +1,6 @@
-# 🚀 [Your Project Title Here]
+# 🚀 Sentinel-X: Threat Intelligence Correlation & Alert Prioritisation Assistant
 
-> ⚠️ **Replace everything in `[ ]` brackets with your actual content before submission.**
+> Modern SaaS platform for multi-domain threat correlation, MITRE ATT&CK mapping, and explainable alert triage.
 
 ---
 
@@ -8,36 +8,33 @@
 
 | Field | Value |
 |---|---|
-| **Team Name** | [Your Team Name] |
-| **Track** | [AI / DevOps / Sustainability / Open] |
-| **Team Lead** | [Name] — [email@ibm.com] |
-| **Members** | [Name 1], [Name 2], [Name 3] |
+| **Team Name** | Pretzel |
+| **Track** | AI |
+| **Team Lead** | Chaitanya Thakar — chaitanythakar851@gmail.com |
+| **Members** | Visha Kardani, Maharshi Trivedi, Tirth Bhatt |
 
 ---
 
 ## 🎯 Problem Statement
 
-> In 2–3 sentences: What problem does your project solve? Who experiences this problem?
-
-[Describe the real-world problem your project addresses. Be specific about who the user is and what pain point they face.]
+Security Operations Centers (SOCs) face overwhelming alert fatigue from thousands of disconnected events streaming across SIEM, satellite telemetry, and network sensors. Analysts struggle to stitch multi-stage attack vectors quickly, often misinterpreting benign space telemetry deviations as cyber incidents and missing critical intrusions.
 
 ---
 
 ## 💡 Solution
 
-> In 2–3 sentences: What did you build? How does it solve the problem above?
-
-[Describe your solution clearly. Explain the core mechanism — what makes it work.]
+Sentinel-X normalizes multi-domain security events into a canonical format, runs real-time behavioral correlation to detect multi-stage attack patterns, enriches events with the MITRE ATT&CK matrix, and calculates transparent risk scores. Crucially, Sentinel-X enforces an operational isolation policy that prevents raw satellite telemetry anomalies from inflating into false cyberattack alarms without corroborating cyber evidence.
 
 ---
 
 ## ✨ Key Features
 
-- **Feature 1:** [Brief description — e.g., "Real-time anomaly detection using watsonx.ai"]
-- **Feature 2:** [Brief description]
-- **Feature 3:** [Brief description]
-- **Feature 4:** [Optional]
-- **Feature 5:** [Optional]
+- **Multi-Domain Normalization:** Canonical ingestion adapters for SIEM (OTRF Mordor, Sysmon), Satellite/Space Telemetry (NASA JPL Telemanom, ESA OPS-SAT), and Network Sensors.
+- **Real-Time Correlation & Attack Stitching:** Automatically identifies multi-stage campaigns (e.g. Brute Force → Credential Access → Script Execution → C2 Beaconing).
+- **MITRE ATT&CK Enrichment:** Behavioral intelligence layer mapping detections to enterprise techniques and tactics.
+- **Explainable Prioritization:** Transparent discrepancy scoring contrasting Source Severity against Sentinel-X Assessed Priority with concrete rationale.
+- **Interactive BLUF Reporting & Simulator:** 1-click executive Bottom Line Up Front briefs and live synthetic event streaming simulator.
+- **Responsive SaaS Interface:** Modern light SaaS UI with interactive charts, slide-over detail panels, and full mobile/tablet responsiveness.
 
 ---
 
@@ -45,27 +42,26 @@
 
 | Category | Technologies |
 |---|---|
-| **Languages** | [e.g., Python, TypeScript] |
-| **Frameworks** | [e.g., FastAPI, React] |
-| **IBM Technologies** | [e.g., watsonx.ai, IBM Bob, IBM Cloud] |
-| **Databases** | [e.g., PostgreSQL, Redis] |
-| **Other** | [e.g., Docker, GitHub Actions] |
+| **Languages** | TypeScript, JavaScript, HTML, CSS, Python |
+| **Frameworks** | React 19, Vite 8, Tailwind CSS v4, Recharts |
+| **IBM Technologies** | watsonx.ai, IBM Bob, IBM Cloud |
+| **Deployment** | Netlify, GitHub Actions |
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-├── src/                  # All source code
-├── docs/                 # Written documentation
-│   ├── problem-statement.md
-│   ├── solution-overview.md
-│   ├── architecture.md
-│   └── setup-guide.md
-├── demo/                 # Demo artifacts
-│   ├── screenshots/      # App screenshots
-│   └── demo-video-link.txt  # Link to demo video
-├── presentation/         # Slide deck
+├── src/                  # React + Vite SaaS application
+│   ├── src/
+│   │   ├── components/   # UI atoms and responsive navigation
+│   │   ├── pages/        # Overview, Alerts, Incidents, DataSources, Simulator, Settings
+│   │   ├── store/        # Sentinel global state and simulation engine
+│   │   └── data/         # Canonical mock datasets & MITRE matrices
+│   └── public/           # Static assets and Netlify SPA redirect rules
+├── Sentinel-files/       # Mirror workspace maintaining exact parity
+├── docs/                 # Hackathon architecture and setup documentation
+├── demo/                 # Live demo links and video walkthrough
 └── submission.yaml       # Structured submission metadata
 ```
 
@@ -73,22 +69,21 @@
 
 ## ⚡ How to Run
 
-> **Copy these exact steps from your [`docs/setup-guide.md`](docs/setup-guide.md)**
+### Quick Start (Windows Launcher)
+Double-click `run.bat` in the repository root to start the development server.
 
+### Manual Setup
 ```bash
-# 1. Clone the repo
-git clone https://github.com/[your-repo].git
-cd [your-repo]
+# 1. Clone the repository
+git clone https://github.com/nerdygeek007/bob-ai-hackathon-pretzel.git
+cd bob-ai-hackathon-pretzel/src
 
 # 2. Install dependencies
-[your install command here]
+npm install
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your values
-
-# 4. Run the project
-[your run command here]
+# 3. Start development server
+npm run dev
+# Open http://localhost:5173
 ```
 
 ---
@@ -97,25 +92,20 @@ cp .env.example .env
 
 | Artifact | Link |
 |---|---|
-| 📹 Demo Video | [See demo/demo-video-link.txt](demo/demo-video-link.txt) |
-| 🌐 Live Demo | [See demo/live-demo-url.txt](demo/live-demo-url.txt) |
-| 🖼️ Screenshots | [See demo/screenshots/](demo/screenshots/) |
-| 📊 Presentation | [See presentation/slides.pdf](presentation/) |
+| 🌐 Live Netlify Deployment | [https://stately-pudding-ce9c61.netlify.app](https://stately-pudding-ce9c61.netlify.app) |
+| 📹 Demo Video Walkthrough | [See demo/demo-video-link.txt](demo/demo-video-link.txt) |
+| 📊 Architecture Guide | [docs/architecture.md](docs/architecture.md) |
+| 📋 Setup Guide | [docs/setup-guide.md](docs/setup-guide.md) |
 
 ---
 
 ## ⚠️ Known Limitations
 
-> Be honest — judges appreciate transparency over overclaiming.
-
-- [Limitation 1: e.g., "Authentication is mocked — not production-ready"]
-- [Limitation 2: e.g., "Only tested on Chrome"]
-- [Limitation 3: e.g., "Feature X is scaffolded but not fully implemented"]
+- Real-time simulation uses an in-browser high-throughput synthetic generator; direct enterprise Kafka and Splunk live connector agents are planned for subsequent milestones.
+- Currently optimized for desktop and mobile web; dedicated native mobile applications are not in scope for this release.
 
 ---
 
 ## 🏅 What We're Most Proud Of
 
-[Tell the judges what part of your submission is strongest and worth paying close attention to.]
-
----
+The unified multi-domain correlation pipeline and modern, intuitive SaaS interface that enables a security analyst to grasp the full context of a multi-stage cyber campaign within 10 seconds without experiencing alert fatigue.
