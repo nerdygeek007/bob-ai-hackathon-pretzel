@@ -55,6 +55,15 @@ The following tasks were executed live against IBM Bob Cloud Gateway using the t
 
 ---
 
+## 📊 Live Cloud Consumption Verification
+
+| Platform | Resource / Metric | Measured Usage | Verification Source |
+|---|---|---|---|
+| **IBM watsonx.ai** | Granite Foundation Model Tokens | **4,165 Tokens** | `eu-de.dataplatform.cloud.ibm.com` (Project: `793d5a80-258a-4de1-b962-6f8c2a8987fa`) |
+| **IBM Bob Cloud** | AI Shell / MCP Invocations | **0.2243 Bobcoins** | `api.us-east.bob.ibm.com` & `C:\Users\CHAITANYA\.bob\db\bob.db` (8 tasks) |
+
+---
+
 ## 📸 Consumption Summary & Screenshots
 
 *Place task session consumption screenshot here before final submission:*
