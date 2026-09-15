@@ -37,7 +37,8 @@ def run_pipeline(
     sector: str = "Sector-4-North",
     file_path: Optional[str] = None,
     custom_alerts: Optional[List[RawTelemetryAlert]] = None,
-    clear_session: bool = True
+    clear_session: bool = True,
+    export_format: Optional[str] = None
 ):
     print_banner()
     service = AresDefenseMcpService()
@@ -96,6 +97,15 @@ def run_pipeline(
 
     print("\nWATSONX GRANITE GUARDIAN ASSURANCE:")
     print(f"   Grounding Score: {bluf_res['guardian_assurance']['score']} | Verdict: {bluf_res['guardian_assurance']['verdict']}")
+
+    if export_format:
+        from src.ai.report_exporter import ReportExporter
+        exp_res = ReportExporter.export_report(bluf_res, format=export_format)
+        print("\n[REPORT EXPORT]")
+        print(f"    [+] Saved {len(exp_res.get('files', {}))} report file(s) to '{exp_res['output_dir']}':")
+        for fmt, finfo in exp_res.get("files", {}).items():
+            print(f"        * [{fmt.upper()}] {finfo['file_name']} ({finfo['size_bytes']} bytes)")
+
     print("=" * 75)
 
 
@@ -147,6 +157,12 @@ if __name__ == "__main__":
     parser.add_argument("--sat-catalog", action="store_true", help="Display tracked defense satellites from CelesTrak NORAD catalog")
     parser.add_argument("--file", help="Path to a custom JSON or JSONL file of alerts")
     parser.add_argument("--interactive", action="store_true", help="Interactively input custom alert details")
+    parser.add_argument(
+        "--export",
+        choices=["markdown", "html", "json", "text", "all"],
+        default=None,
+        help="Export generated BLUF report to disk in reports/ (markdown, html, json, text, or all)"
+    )
     args = parser.parse_args()
 
     if args.sat_catalog:
@@ -170,18 +186,18 @@ if __name__ == "__main__":
 
     if args.interactive:
         alerts = interactive_prompt()
-        run_pipeline(custom_alerts=alerts, sector=alerts[0].sector or effective_sector)
+        run_pipeline(custom_alerts=alerts, sector=alerts[0].sector or effective_sector, export_format=args.export)
     elif args.file:
-        run_pipeline(file_path=args.file, sector=effective_sector)
+        run_pipeline(file_path=args.file, sector=effective_sector, export_format=args.export)
     elif args.scenario == "custom":
         custom_file = os.path.join(os.path.dirname(__file__), "data", "sample_custom_alerts.json")
-        run_pipeline(file_path=custom_file, sector=effective_sector)
+        run_pipeline(file_path=custom_file, sector=effective_sector, export_format=args.export)
     elif args.scenario == "real_ephemeris":
         service = AresDefenseMcpService()
         alerts = service.ephemeris_client.generate_satellite_anomaly_alerts(
             sector=effective_sector,
             satellite_query=args.satellite or "SAR-LUPE"
         )
-        run_pipeline(custom_alerts=alerts, sector=effective_sector)
+        run_pipeline(custom_alerts=alerts, sector=effective_sector, export_format=args.export)
     else:
-        run_pipeline(scenario=args.scenario, sector=effective_sector)
+        run_pipeline(scenario=args.scenario, sector=effective_sector, export_format=args.export)

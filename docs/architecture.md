@@ -40,10 +40,11 @@ flowchart TD
         GUARDIAN["watsonx Granite Guardian (Hallucination Gate)"]
     end
 
-    subgraph Delivery["4. Command Delivery & Operations (src/dashboard & src/cli)"]
+    subgraph Delivery["4. Command Delivery & Operations (src/dashboard, src/cli, src/ai/report_exporter.py)"]
         WARROOM["Tactical Commander War Room Dashboard (FastAPI / Tailwind / XAI Bars)"]
         TERMINAL["IBM Bob CLI War Room Terminal"]
         COA["Wargamed Courses of Action (COAs) & Audit Lineage"]
+        EXPORTER["BLUF Multi-Format Exporter (Markdown, HTML Print-to-PDF, JSON, Text)"]
     end
 
     SIEM_SIM -->|Live EPS Stream| Feeds
@@ -57,7 +58,7 @@ flowchart TD
     BOB_MCP <--> MITRE
     BOB_MCP <--> GRANITE
     GRANITE <--> GUARDIAN
-    BOB_MCP --> WARROOM & TERMINAL & COA
+    BOB_MCP --> WARROOM & TERMINAL & COA & EXPORTER
 ```
 
 ## Components
@@ -73,7 +74,8 @@ flowchart TD
 | **IBM Bob MCP Server** | Python `mcp` SDK / JSON-RPC | Exposes native defense intelligence tools to the IBM Bob CLI and IDE for interactive terminal queries. |
 | **Foundation AI Engine** | IBM watsonx.ai Granite 3.0 8B Instruct | Synthesizes concise military-standard BLUF briefings and wargames Courses of Action (COAs). |
 | **Assurance Gate** | IBM watsonx Granite Guardian 3.0 | Verifies factual grounding of generated briefings against raw telemetry frames with zero hallucination tolerance. |
-| **Tactical War Room UI** | FastAPI / Static HTML / TailwindCSS | Provides commanders and analysts with live alert feeds, cluster cards, XAI progress bars, MITRE matrix heatmaps, and BLUF exports. |
+| **BLUF Report Exporter** | Python / Jinja-free HTML / JSON / Markdown / Text | Formats and outputs multi-format defense intelligence briefings with `@media print` clean PDF styling, XAI charts, MITRE tables, and cryptographic audit trails. |
+| **Tactical War Room UI** | FastAPI / Static HTML / TailwindCSS | Provides commanders and analysts with live alert feeds, cluster cards, XAI progress bars, MITRE matrix heatmaps, and interactive BLUF export modal. |
 
 ## Data Flow
 
@@ -83,7 +85,8 @@ flowchart TD
 4. **Graph Clustering:** The SpatioTemporalGraphEngine adds nodes for alerts, IOCs, and subnets, linking events occurring within the sliding time window (30 mins) in the same sector across cyber, space, and tactical domains.
 5. **Bayesian Threat Scoring & XAI Feature Attribution:** Aggregated probability of genuine threat is calculated across multi-sensor confirmations ($P = 1 - \prod(1 - P_i)$), and SHAP-style Explainable AI feature attributions are computed.
 6. **MITRE Classification:** Observed behaviors are mapped to MITRE ATT&CK techniques with mitigations.
-7. **BLUF Briefing & COA Synthesis:** IBM Granite 3.0 synthesizes the 4-part military BLUF briefing; Granite Guardian verifies factual grounding; the result is output to the CLI, Dashboard, and MCP stream.
+7. **BLUF Briefing & COA Synthesis:** IBM Granite 3.0 synthesizes the 4-part military BLUF briefing; Granite Guardian verifies factual grounding.
+8. **Multi-Format Intelligence Export:** `ReportExporter` formats the briefing into Markdown (`.md`), Standalone Print-Ready HTML (`.html`), Machine JSON (`.json`), or ASCII Field Text (`.txt`), delivered via War Room UI, REST API (`/api/reports/export`), IBM Bob MCP (`ares_export_bluf_report`), or CLI (`--export`).
 
 ## Security Considerations
 

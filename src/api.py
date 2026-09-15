@@ -8,13 +8,14 @@ import os
 import json
 import uuid
 from typing import List, Optional, Dict, Any, Union
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.engine.schemas import RawTelemetryAlert, TelemetryDomain, IncidentCluster, CommanderBlufReport
+from src.ai.report_exporter import ReportExporter
 from src.mcp_server import AresDefenseMcpService, SESSION_RAW_ALERTS, SESSION_CLUSTERS, SESSION_REPORTS
 
 app = FastAPI(
@@ -189,6 +190,79 @@ def get_reports():
         "count": len(SESSION_REPORTS),
         "reports": [r.model_dump() for r in SESSION_REPORTS.values()]
     }
+
+
+class ExportReportRequest(BaseModel):
+    report_id: Optional[str] = None
+    format: str = "markdown"  # markdown | html | json | text | all
+    output_dir: str = "reports"
+
+
+@app.get("/api/reports/export")
+def export_report_get(
+    report_id: Optional[str] = Query(None),
+    format: str = Query("markdown"),
+    download: bool = Query(False)
+):
+    """Exports the latest or specified BLUF report in Markdown, HTML, JSON, or Text format."""
+    target_report = None
+    if report_id and report_id in SESSION_REPORTS:
+        target_report = SESSION_REPORTS[report_id]
+    elif SESSION_REPORTS:
+        target_report = list(SESSION_REPORTS.values())[-1]
+    else:
+        bluf_dict = mcp_service.generate_bluf()
+        target_report = SESSION_REPORTS.get(bluf_dict.get("report_id"))
+
+    if not target_report:
+        raise HTTPException(status_code=404, detail="No BLUF report available to export.")
+
+    fmt_lower = format.lower()
+    if fmt_lower in ["html", "htm"]:
+        content = ReportExporter.to_html(target_report)
+        media_type = "text/html"
+        ext = "html"
+    elif fmt_lower == "json":
+        content = ReportExporter.to_json(target_report)
+        media_type = "application/json"
+        ext = "json"
+    elif fmt_lower in ["text", "txt"]:
+        content = ReportExporter.to_text(target_report)
+        media_type = "text/plain"
+        ext = "txt"
+    else:
+        content = ReportExporter.to_markdown(target_report)
+        media_type = "text/markdown"
+        ext = "md"
+
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{target_report.report_id}.{ext}"'
+
+    return Response(content=content, media_type=media_type, headers=headers)
+
+
+@app.post("/api/reports/export")
+def export_report_post(req: ExportReportRequest):
+    """Saves the BLUF report directly to disk in the specified format (markdown, html, json, text, or all)."""
+    target_report = None
+    if req.report_id and req.report_id in SESSION_REPORTS:
+        target_report = SESSION_REPORTS[req.report_id]
+    elif SESSION_REPORTS:
+        target_report = list(SESSION_REPORTS.values())[-1]
+    else:
+        bluf_dict = mcp_service.generate_bluf()
+        target_report = SESSION_REPORTS.get(bluf_dict.get("report_id"))
+
+    if not target_report:
+        raise HTTPException(status_code=404, detail="No BLUF report available to export.")
+
+    result = ReportExporter.export_report(
+        report=target_report,
+        format=req.format,
+        output_dir=req.output_dir
+    )
+    return result
 
 
 class BobTaskRequest(BaseModel):

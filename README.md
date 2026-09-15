@@ -62,16 +62,17 @@ ARES (Automated Reconnaissance & Threat Evaluation System) is an autonomous mult
 ├── .gitignore               # Secrets and build artifacts exclusions
 ├── .github/workflows/       # Automated submission validation action
 ├── src/                     # Complete application source code
-│   ├── data/                # MITRE CTI loader, CelesTrak ephemeris client, synthetic scenarios
+│   ├── data/                # MITRE CTI loader, SIEM simulator, CelesTrak ephemeris client
 │   ├── engine/              # STIX 2.1 normalizer, anti-chaff filter, spatio-temporal graph
-│   ├── ai/                  # watsonx Granite client, MITRE mapper, BLUF generator
-│   ├── dashboard/           # Tactical Commander War Room Web UI
-│   ├── tests/               # Pytest automated test suite (21/21 passed)
+│   ├── ai/                  # watsonx Granite client, MITRE mapper, BLUF generator, report exporter
+│   ├── dashboard/           # Tactical Commander War Room Web UI (with Export Modal)
+│   ├── tests/               # Pytest automated test suite (40/40 passed)
 │   ├── mcp_server.py        # IBM Bob Model Context Protocol Server
-│   ├── api.py               # FastAPI REST backend server
-│   ├── cli.py               # Interactive terminal CLI tool
+│   ├── api.py               # FastAPI REST backend server (with /api/reports/export)
+│   ├── cli.py               # Interactive terminal CLI tool (with --export flag)
 │   ├── requirements.txt     # Dependency manifest
 │   └── .env.example         # Environment template
+├── reports/                 # Exported defense intelligence BLUF briefings (MD, HTML, JSON, TXT)
 ├── docs/                    # Official documentation
 │   ├── problem-statement.md # In-depth problem analysis
 │   ├── solution-overview.md # Core mechanism and differentiation
@@ -101,11 +102,11 @@ cd bob-ai-hackathon-pretzel
 # 3. Install dependencies
 pip install -r src/requirements.txt
 
-# 4. Run automated test suite
+# 4. Run automated test suite (40/40 passed)
 python -m pytest src/tests/ -v
 
-# 5. Run full 5-step pipeline in terminal (APT Hybrid or Real Satellite Ephemeris)
-python -m src.cli --scenario apt_hybrid
+# 5. Run full 5-step pipeline in terminal with Multi-Format BLUF Export
+python -m src.cli --scenario apt_hybrid --export all
 python -m src.cli --scenario real_ephemeris
 python -m src.cli --sat-catalog
 

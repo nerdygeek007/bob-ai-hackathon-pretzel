@@ -285,6 +285,34 @@ class AresDefenseMcpService:
             ]
         }
 
+    def export_bluf_report(
+        self,
+        report_id: Optional[str] = None,
+        format: str = "markdown",
+        output_dir: str = "reports"
+    ) -> Dict[str, Any]:
+        """Exports a BLUF intelligence report to disk in Markdown, HTML, JSON, or Text format."""
+        from src.ai.report_exporter import ReportExporter
+        global SESSION_REPORTS
+
+        target_report = None
+        if report_id and report_id in SESSION_REPORTS:
+            target_report = SESSION_REPORTS[report_id]
+        elif SESSION_REPORTS:
+            target_report = list(SESSION_REPORTS.values())[-1]
+        else:
+            self.generate_bluf()
+            target_report = list(SESSION_REPORTS.values())[-1] if SESSION_REPORTS else None
+
+        if not target_report:
+            return {"error": "No BLUF report available to export."}
+
+        return ReportExporter.export_report(
+            report=target_report,
+            format=format,
+            output_dir=output_dir
+        )
+
     def get_satellite_ephemeris(self, query: Optional[str] = None) -> List[Dict[str, Any]]:
         """Returns real-world satellite ephemeris parameters from CelesTrak NORAD catalog."""
         catalog = self.ephemeris_client.get_catalog(query=query)
@@ -375,6 +403,28 @@ TOOLS_REGISTRY = [
                 }
             }
         }
+    },
+    {
+        "name": "ares_export_bluf_report",
+        "description": "Exports a Commander BLUF intelligence briefing to disk in Markdown (.md), HTML (.html), JSON (.json), or Text (.txt) formats.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "report_id": {
+                    "type": "string",
+                    "description": "Optional specific report ID to export (defaults to latest)"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["markdown", "html", "json", "text", "all"],
+                    "description": "Target export format (default: markdown)"
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Target directory to write report (default: reports)"
+                }
+            }
+        }
     }
 ]
 
@@ -450,6 +500,12 @@ def run_stdio_mcp_server():
                     output = service.correlate_alerts(sector=args.get("sector"))
                 elif tool_name == "ares_generate_bluf":
                     output = service.generate_bluf(cluster_id=args.get("cluster_id"))
+                elif tool_name == "ares_export_bluf_report":
+                    output = service.export_bluf_report(
+                        report_id=args.get("report_id"),
+                        format=args.get("format", "markdown"),
+                        output_dir=args.get("output_dir", "reports")
+                    )
                 elif tool_name == "ares_get_satellite_ephemeris":
                     output = service.get_satellite_ephemeris(query=args.get("query"))
                 else:

@@ -70,7 +70,7 @@
                 <span>🔄 Correlate & Brief</span>
             </button>
 
-            <button onclick="exportBlufMarkdown()" class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-mono transition">
+            <button onclick="openExportModal()" class="px-3 py-1.5 rounded-md bg-cyan-900/60 hover:bg-cyan-800 text-cyan-200 border border-cyan-600 font-mono transition flex items-center space-x-1 shadow-lg shadow-cyan-950/20">
                 <span>📥 Export BLUF</span>
             </button>
         </div>
@@ -415,29 +415,40 @@
             setTimeout(() => toast.classList.add("hidden"), 4500);
         }
 
-        function exportBlufMarkdown() {
-            if (!currentBlufData) {
-                alert("Please wait for BLUF to finish generating.");
-                return;
-            }
-            const md = `# COMMANDER THREAT INTELLIGENCE BRIEFING (BLUF)\n` +
-                `REPORT ID: ${currentBlufData.report_id}\n` +
-                `CLASSIFICATION: ${currentBlufData.classification}\n` +
-                `SECTOR: ${currentBlufData.sector}\n` +
-                `SEVERITY: ${currentBlufData.severity} | CONFIDENCE: ${currentBlufData.bayesian_confidence}\n` +
-                `ATTRIBUTION: ${currentBlufData.threat_actor}\n\n` +
-                `## 1. BOTTOM LINE UP FRONT (BLUF)\n${currentBlufData.bottom_line_up_front}\n\n` +
-                `## 2. KEY FINDINGS\n` + currentBlufData.key_findings.map(f => `- ${f}`).join("\n") + "\n\n" +
-                `## 3. MITRE ATT&CK TTPS\n` + currentBlufData.mitre_ttps.map(t => `- [${t.id}] ${t.name} (${t.tactic}) - ${t.confidence}`).join("\n") + "\n\n" +
-                `## 4. WARGAMED COURSES OF ACTION\n` + currentBlufData.wargamed_coas.map(c => `### ${c.option_id}: ${c.title} ${c.is_recommended ? '(RECOMMENDED)' : ''}\n- Containment: ${c.containment}\n- Disruption: ${c.mission_disruption}\n- Tradeoff: ${c.tradeoff}`).join("\n\n");
+        function openExportModal() {
+            document.getElementById("export-modal").classList.remove("hidden");
+        }
 
-            const blob = new Blob([md], { type: "text/markdown" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${currentBlufData.report_id}.md`;
-            a.click();
-            URL.revokeObjectURL(url);
+        function closeExportModal() {
+            document.getElementById("export-modal").classList.add("hidden");
+        }
+
+        function exportBlufFormat(format) {
+            const reportId = currentBlufData ? currentBlufData.report_id : "";
+            const url = `/api/reports/export?format=${format}&download=true${reportId ? `&report_id=${encodeURIComponent(reportId)}` : ''}`;
+            window.open(url, "_blank");
+            closeExportModal();
+        }
+
+        async function saveAllToServerReports() {
+            const reportId = currentBlufData ? currentBlufData.report_id : "";
+            try {
+                const res = await fetch("/api/reports/export", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ report_id: reportId, format: "all", output_dir: "reports" })
+                });
+                const data = await res.json();
+                if (data.status === "SUCCESS") {
+                    const toast = document.getElementById("toast");
+                    document.getElementById("toast-msg").innerText = `Saved 4 report files (.md, .html, .json, .txt) to reports/ on server!`;
+                    toast.classList.remove("hidden");
+                    setTimeout(() => toast.classList.add("hidden"), 4500);
+                }
+            } catch (e) {
+                console.error("Export error:", e);
+            }
+            closeExportModal();
         }
 
         function renderFallbackClusters() {
@@ -619,6 +630,93 @@
                     <button onclick="closeCustomModal()" class="px-3 py-1.5 rounded bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition">Cancel</button>
                     <button onclick="submitCustomAlert()" class="px-4 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs transition shadow-lg shadow-cyan-600/30">🚀 Ingest & Correlate Live</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Report Modal -->
+    <div id="export-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="hud-panel rounded-xl border border-cyan-500/50 p-6 max-w-lg w-full shadow-2xl relative">
+            <button onclick="closeExportModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white font-bold text-lg">&times;</button>
+            <div class="flex items-center space-x-2.5 mb-3">
+                <span class="text-2xl">📥</span>
+                <div>
+                    <h3 class="font-black text-slate-100 text-base tracking-wide uppercase">Commander BLUF Report Exporter</h3>
+                    <p class="text-[11px] text-slate-400">Generate publication-grade defense intelligence briefings in multiple formats.</p>
+                </div>
+            </div>
+
+            <div class="space-y-3 my-4 text-xs font-mono">
+                <!-- Option 1: Markdown -->
+                <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between hover:border-cyan-500/50 transition">
+                    <div>
+                        <div class="font-bold text-slate-200 flex items-center space-x-2">
+                            <span>📝</span><span>Markdown Intelligence Briefing</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-sans mt-0.5">DoD/NATO standard formatted .md with MITRE tables & XAI weights.</div>
+                    </div>
+                    <button onclick="exportBlufFormat('markdown')" class="px-3 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold transition">
+                        Download .md
+                    </button>
+                </div>
+
+                <!-- Option 2: HTML / Printable Briefing -->
+                <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between hover:border-cyan-500/50 transition">
+                    <div>
+                        <div class="font-bold text-slate-200 flex items-center space-x-2">
+                            <span>📄</span><span>Executive HTML / Printable Briefing</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-sans mt-0.5">Standalone interactive document with @media print stylesheet for PDF export.</div>
+                    </div>
+                    <button onclick="exportBlufFormat('html')" class="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold transition">
+                        Download .html
+                    </button>
+                </div>
+
+                <!-- Option 3: Machine JSON -->
+                <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between hover:border-cyan-500/50 transition">
+                    <div>
+                        <div class="font-bold text-slate-200 flex items-center space-x-2">
+                            <span>🗄️</span><span>Machine STIX/SOAR JSON</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-sans mt-0.5">Structured machine-readable telemetry for SIEM and automated playbooks.</div>
+                    </div>
+                    <button onclick="exportBlufFormat('json')" class="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold transition">
+                        Download .json
+                    </button>
+                </div>
+
+                <!-- Option 4: ASCII Field Tele-type -->
+                <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between hover:border-cyan-500/50 transition">
+                    <div>
+                        <div class="font-bold text-slate-200 flex items-center space-x-2">
+                            <span>📻</span><span>Field Radio / Tele-Type (ASCII)</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-sans mt-0.5">Low-bandwidth plain text briefing for tactical edge / radio relays.</div>
+                    </div>
+                    <button onclick="exportBlufFormat('text')" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition">
+                        Download .txt
+                    </button>
+                </div>
+
+                <!-- Option 5: Save All to reports/ on Server -->
+                <div class="p-3 rounded-lg bg-emerald-950/30 border border-emerald-600/40 flex items-center justify-between">
+                    <div>
+                        <div class="font-bold text-emerald-300 flex items-center space-x-2">
+                            <span>💾</span><span>Save All Formats to Server `reports/`</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-sans mt-0.5">Generates and saves .md, .html, .json, and .txt to project reports directory.</div>
+                    </div>
+                    <button onclick="saveAllToServerReports()" class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold transition">
+                        Save to Disk
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="closeExportModal()" class="px-4 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs">
+                    Close
+                </button>
             </div>
         </div>
     </div>
