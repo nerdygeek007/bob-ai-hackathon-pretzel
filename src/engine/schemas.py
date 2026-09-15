@@ -16,6 +16,8 @@ class TelemetryDomain(str, Enum):
     SATELLITE_EW = "satellite_ew"
     KINETIC_RADAR = "kinetic_radar"
     OSINT_INTEL = "osint_intel"
+    TACTICAL_COT = "tactical_cot"
+    OCSF_SECURITY = "ocsf_security"
 
 
 class SeverityLevel(str, Enum):
@@ -98,6 +100,51 @@ class CourseOfAction(BaseModel):
     is_recommended: bool = False
 
 
+class OCSFSecurityFinding(BaseModel):
+    """Open Cybersecurity Schema Framework (OCSF v1.1) Class 2001 / 1001."""
+    class_uid: int = Field(2001, description="2001: Security Finding, 1001: Detection Finding")
+    activity_id: int = Field(1, description="1: Create, 2: Update, 3: Close")
+    severity_id: int = Field(4, description="1: Info, 2: Low, 3: Medium, 4: High, 5: Critical")
+    time: str = Field(..., description="ISO 8601 timestamp")
+    finding_info: Dict[str, Any] = Field(default_factory=dict)
+    device: Optional[Dict[str, Any]] = None
+    actor: Optional[Dict[str, Any]] = None
+    observables: List[Dict[str, Any]] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class CoTTelemetry(BaseModel):
+    """Cursor-on-Target (CoT) Defense / Tactical Event Schema (MIL-STD-2525)."""
+    uid: str = Field(..., description="Unique entity callsign (e.g. SATELLITE-LEO-01, RECON-UAV-04)")
+    how: str = Field("m-g", description="m-g: Machine GPS, m-r: Machine Radar, h-e: Human Estimate")
+    time: str = Field(..., description="Observation start time")
+    start: str = Field(..., description="Valid start time")
+    stale: str = Field(..., description="Drop track stale time")
+    type: str = Field("a-h-G", description="MIL-STD-2525 CoT type (e.g. a-f-G: Friendly Ground, a-h-G: Hostile Ground)")
+    lat: float = Field(..., description="WGS-84 Latitude")
+    lon: float = Field(..., description="WGS-84 Longitude")
+    hae: float = Field(0.0, description="Height Above Ellipsoid in meters")
+    ce: float = Field(10.0, description="Circular error probability (meters)")
+    le: float = Field(10.0, description="Linear error probability (meters)")
+    detail: Dict[str, Any] = Field(default_factory=dict, description="Tactical contact details, contact status, sensor locks")
+
+
+class XAiFeatureAttribution(BaseModel):
+    """Explainable AI (XAI) feature attribution for commander transparency (SHAP/LIME style)."""
+    feature_name: str = Field(..., description="e.g. Multi-Domain Sensor Fusion, Shannon Entropy Anomaly, MITRE Criticality")
+    importance_weight: float = Field(..., description="Relative contribution percentage (0-100%)")
+    signal_direction: str = Field("RISK_INCREASING", description="RISK_INCREASING, RISK_DECREASING, NEUTRAL")
+    evidence_rationale: str = Field(..., description="Concise tactical explanation of feature influence")
+
+
+class XAiExplanation(BaseModel):
+    """Explainable AI breakdown for Bayesian threat correlation."""
+    algorithm: str = Field("Spatio-Temporal Graph + Bayesian + SHAP Feature Attribution")
+    base_rate_prior: float = Field(0.10, description="Background false-positive prior")
+    posterior_confidence: float = Field(0.99, description="Calibrated threat confidence")
+    feature_attributions: List[XAiFeatureAttribution] = Field(default_factory=list)
+
+
 class IncidentCluster(BaseModel):
     """A correlated multi-domain incident comprising multiple alerts."""
     cluster_id: str = Field(..., description="e.g. INC-2026-ALPHA-01")
@@ -114,6 +161,7 @@ class IncidentCluster(BaseModel):
     alerts: List[NormalizedStixEntity]
     mitre_techniques: List[MitreTechniqueMatch] = Field(default_factory=list)
     attack_lifecycle_stage: str = Field("Active Intrusion", description="Reconnaissance, Initial Access, Lateral Movement, Impact")
+    xai_explanation: Optional[XAiExplanation] = None
 
 
 class ProvenanceCitation(BaseModel):
@@ -140,6 +188,7 @@ class CommanderBlufReport(BaseModel):
     severity: SeverityLevel
     bayesian_confidence: float
     threat_actor_attribution: str
+    xai_explanation: Optional[XAiExplanation] = None
     
     # 2. Key Findings
     key_findings: List[str]

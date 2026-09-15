@@ -23,9 +23,11 @@
 ```
 D:\ibm\bob-ai-hackathon-pretzel\
 ├── run.bat                          # Starts the Tactical War Room server (http://127.0.0.1:8000)
+├── stream_siem.bat                  # 1-Click continuous SIEM telemetry streamer (10 EPS)
 ├── stop.bat                         # Stops the active server process cleanly
 ├── restart.bat                      # Restarts the server
 ├── test.bat                         # Runs the full test suite (pytest + benchmarks + CLI)
+├── reports/                         # Exported defense intelligence BLUF briefings (MD, HTML, JSON, TXT)
 ├── submission.yaml                  # Hackathon metadata, architecture, and submission declaration
 ├── README.md                        # Master project documentation
 ├── PROJECT.md                       # Project context and execution guide (this file)
@@ -47,19 +49,25 @@ D:\ibm\bob-ai-hackathon-pretzel\
     │   ├── watsonx_client.py        # IBM watsonx Granite 3.0 & Granite Guardian client
     │   ├── mitre_mapper.py          # MITRE ATT&CK mapper and tactic confidence engine
     │   ├── bluf_generator.py        # BLUF executive summarizer & COA wargamer
+    │   ├── report_exporter.py       # Multi-format BLUF report exporter (MD, HTML, JSON, TXT)
     │   └── provenance_tracker.py    # SHA-256 cryptographic provenance verification
     ├── engine/                      # Core correlation and processing engine
-    │   ├── schemas.py               # Pydantic data schemas (STIX 2.1, Alerts, Clusters, BLUF)
-    │   ├── normalizer.py            # Cross-domain telemetry normalizer (CEF/Syslog/RF)
+    │   ├── schemas.py               # Pydantic data schemas (STIX 2.1, OCSF v1.1, CoT, XAI)
+    │   ├── normalizer.py            # Cross-domain telemetry normalizer (CEF/Syslog/OCSF/CoT)
     │   ├── anti_chaff_filter.py     # Shannon Entropy alert storm & decoy suppressor
-    │   └── spatio_temporal_graph.py # Spatio-temporal graph correlation engine
+    │   └── spatio_temporal_graph.py # Spatio-temporal graph correlation & XAI engine
     ├── data/                        # Datasets, MITRE matrices, and fine-tuning data
+    │   ├── siem_simulator.py        # High-throughput SIEM simulator (CEF, EDR, OCSF, CoT)
     │   ├── mitre_attack_loader.py   # MITRE ATT&CK Enterprise and ICS matrix loader
+    │   ├── satellite_ephemeris_client.py # Real NORAD CelesTrak ephemeris client
     │   ├── synthetic_scenarios.py   # Multi-domain cyber-physical telemetry generator
     │   └── training_builder.py      # Granite fine-tune JSONL & evaluation benchmark builder
     ├── dashboard/                   # Tactical Commander War Room Web UI
-    │   └── index.html               # Live operational dashboard
+    │   └── index.html               # Live operational dashboard with XAI progress bars & Export Modal
     └── tests/                       # Automated testing & validation suite
+        ├── test_report_exporter.py  # Multi-format BLUF report exporter test suite
+        ├── test_siem_simulator.py   # SIEM simulator, OCSF, CoT, and XAI test suite
+        ├── test_satellite_ephemeris.py # NORAD CelesTrak ephemeris test suite
         ├── test_ares_engine.py      # Unit tests for core engine modules
         ├── test_api_endpoints.py    # Integration tests for FastAPI endpoints
         ├── test_submission_validator.py # Hackathon schema & CI validation tests
@@ -108,7 +116,14 @@ All operations can be executed with 1-click batch scripts:
   & .\.venv\Scripts\python.exe -m src.cli --interactive
   ```
 
-- **Run Automated Test Suite (16 Pytest tests + Benchmarks + CLI)**:
+- **Export Intelligence Reports via CLI**:
+  ```powershell
+  & .\.venv\Scripts\python.exe -m src.cli --scenario apt_hybrid --export all
+  & .\.venv\Scripts\python.exe -m src.cli --scenario simulated_siem --export html
+  ```
+  *(Outputs reports directly to `reports/` folder in Markdown, HTML, JSON, and TXT)*
+
+- **Run Automated Test Suite (40 Pytest tests + Benchmarks + CLI)**:
   ```cmd
   .\test.bat
   ```
@@ -129,12 +144,34 @@ All operations can be executed with 1-click batch scripts:
 4. **Spatio-Temporal Graph Correlation**: NetworkX graph engine clustering cross-domain alerts via temporal proximity (30-minute sliding window) and subnet co-occurrence, computing Bayesian threat confidence.
 5. **MITRE ATT&CK Matrix Mapping**: Automated mapping against MITRE Enterprise & ICS matrices, identifying TTPs (`T1059`, `T0814`, `T1078`), defense mitigations, and adversary attribution (e.g. APT28 / Sandworm).
 6. **watsonx.ai Granite 3.0 BLUF Generation**: Military-grade tactical briefings ("Bottom Line Up Front") with three wargamed Courses of Action (COAs) and Granite Guardian hallucination checks (Grounding score: 0.980).
-7. **Commander Tactical War Room UI**: Responsive dark-theme dashboard with live cluster inspection, interactive COA dispatching, sector switching, custom alert injector modal, and Markdown report export.
-8. **IBM Bob MCP Server**: Implements the Model Context Protocol standard exposing `ares_ingest_telemetry`, `ares_correlate_threats`, and `ares_generate_bluf`.
-9. **0-Coin Local Execution**: Built-in deterministic fallback ensuring complete testing without consuming user Bobcoins or cloud credits.
+7. **Commander Tactical War Room UI**: Responsive dark-theme dashboard with live cluster inspection, interactive COA dispatching, sector switching, custom alert injector modal, and multi-format report exporter modal.
+8. **Multi-Format BLUF Report Exporter**: Standalone production-grade exporter (`src/ai/report_exporter.py`) producing Markdown (`.md`), Standalone Print-Ready HTML (`.html`) with `@media print` clean PDF styling, Structured JSON (`.json`), and ASCII Field Text (`.txt`). Fully accessible via REST API (`/api/reports/export`), IBM Bob MCP tool (`ares_export_bluf_report`), CLI (`--export`), and War Room UI modal.
+9. **IBM Bob MCP Server**: Implements the Model Context Protocol standard exposing `ares_ingest_telemetry`, `ares_correlate_threats`, `ares_generate_bluf`, `ares_simulate_siem`, `ares_get_satellite_ephemeris`, and `ares_export_bluf_report`.
+10. **0-Coin Local Execution**: Built-in deterministic fallback ensuring complete testing without consuming user Bobcoins or cloud credits.
 
 ---
 
+## 6. Recent Changelog
+- **2026-09-15**: Implemented **Multi-Format BLUF Report Exporter (`src/ai/report_exporter.py`)**:
+  - Engineered 4 standard export formats: **Markdown (`.md`)**, **Standalone Print-Ready HTML (`.html`)**, **Structured Machine JSON (`.json`)**, and **ASCII Field Text (`.txt`)**.
+  - All formats enforce complete defense intelligence structure: Classification banner (`SECRET // NOFORN // EXERCISE`), Document & Incident metadata, Executive BLUF summary, Key Operational Findings, Explainable AI (XAI) feature attribution breakdown, MITRE ATT&CK Enterprise/ICS TTP mapping with mitigations, Wargamed COAs tradeoff matrix, Cryptographic SHA-256 sensor audit trail, and Granite Guardian assurance metrics.
+  - Standalone HTML features a modern tactical dark HUD with an embedded `@media print` stylesheet for 1-click clean PDF generation via native browser print (`Ctrl+P`).
+  - Integrated across all system interfaces:
+    - Core Engine: `ReportExporter` class saving to `reports/` folder.
+    - REST API: `GET /api/reports/export` (supports `format` & `download=true`) and `POST /api/reports/export`.
+    - IBM Bob MCP Server: `ares_export_bluf_report` tool registered with JSON schema.
+    - Terminal CLI: `--export {markdown,html,json,text,all}` argument.
+    - Tactical War Room UI: `#export-modal` offering 1-click downloads in each format or bulk save to server.
+  - Automated tests: Added `src/tests/test_report_exporter.py` with 8 comprehensive unit & integration tests; test suite now passes **40/40 tests (100% green)**.
+
+- **2026-09-15**: Implemented **SIEM & Multi-Source Telemetry Simulator (`alrt-agent` style)** and **Explainable AI (XAI) Feature Attribution**:
+  - `src/data/siem_simulator.py`: Generates high-volume heterogeneous telemetry including IBM QRadar CEF, CrowdStrike EDR, Suricata Syslog, OCSF v1.1 Class 2001 Finding JSON, and Cursor-on-Target (CoT) MIL-STD-2525 tracks.
+  - `stream_siem.bat`: 1-click continuous telemetry streaming script pushing live events directly to `/api/ingest`.
+  - `src/engine/normalizer.py`: Normalizes OCSF and CoT schemas into standard STIX 2.1 entities with SHA-256 cryptographic provenance hashes.
+  - `src/engine/spatio_temporal_graph.py`: Calculates transparent SHAP-style Explainable AI (XAI) feature attribution decision weights (Multi-Domain Sensor Fusion, MITRE TTPs, Shannon Entropy, Asset Criticality) summing to 100%.
+  - `src/mcp_server.py` & `src/api.py`: Added `ares_simulate_siem` MCP tool, `/api/simulate` endpoint, and full OCSF/CoT parsing.
+  - `src/dashboard/index.html`: Added visual XAI Feature Attribution cards with interactive decision weight progress bars.
+  - `src/tests/test_siem_simulator.py`: Added 11 comprehensive unit & integration tests; full pytest test suite now passes **32/32 tests (100% green)**.
 - **2026-09-15**: Refined `README.md` and `submission.yaml`: incorporated empirical success rate benchmark table into `What We're Most Proud Of` (100% Recall, 95.8% Precision, 0.978 F1, 92.5% Chaff Suppression, 0.980 Grounding, 0.12s latency) and condensed `Known Limitations` into concise, punchy lines.
 - **2026-09-15**: Integrated **Real Public Satellite Ephemeris Ingestion** via CelesTrak NORAD General Perturbations (GP) API (`src/data/satellite_ephemeris_client.py` and `cached_satellite_ephemeris.json`): calculates real-world orbital altitude, period, and regimes (LEO/MEO/GEO) for defense assets (SAR-LUPE, GPS NAVSTAR), extracts `norad-cat-id` & `defense-satellite-asset` STIX 2.1 IOCs, exposes CLI `--scenario real_ephemeris` & `--sat-catalog`, adds `/api/satellites/ephemeris` REST endpoint & `ares_get_satellite_ephemeris` MCP tool, and created `src/tests/test_satellite_ephemeris.py` bringing automated test suite to 21/21 passed.
 - **2026-09-15**: Refined known limitations and operational architecture documentation (`README.md`, `submission.yaml`): articulated defense OPSEC telemetry compliance (NASA CCSDS/ESA standards with plug-and-play adapter connectors) and resilient multi-tier AI execution (Live IBM watsonx.ai Granite 4 / IBM Bob Cloud vs. Air-Gapped Zero-Token Edge mode).
