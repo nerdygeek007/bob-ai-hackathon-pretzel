@@ -11,6 +11,8 @@ import {
   AttackScenario,
   SimEvent,
 } from '../types';
+import { MitreMappingResult } from '../types';
+import { mitreService, AlertClusterPayload } from '../services/mitreService';
 import { initialDomains, initialEnrichmentSources } from '../data/mockSources';
 import { mockAlerts } from '../data/mockAlerts';
 import { mockIncidents } from '../data/mockIncidents';
@@ -45,6 +47,11 @@ interface SentinelState {
   setSimulatorRate: (rate: number) => void;
   setSelectedScenario: (scenario: AttackScenario) => void;
 
+  // MITRE RAG state
+  mitreMappings: MitreMappingResult[];
+  mitreMappingLoading: boolean;
+  mitreMappingError: string | null;
+
   // Actions
   toggleDomain: (domainId: DomainType) => void;
   toggleSource: (domainId: DomainType, sourceId: string) => void;
@@ -60,6 +67,7 @@ interface SentinelState {
   ) => void;
   setIsDemoMode: (enabled: boolean) => void;
   loadDemoData: () => void;
+  runMitreMapping: (payloads: AlertClusterPayload[]) => Promise<void>;
 }
 
 const initialSimEvents: SimEvent[] = [
@@ -224,6 +232,26 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('INC-1042');
   const [correlationConfig, setCorrelationConfig] = useState<CorrelationConfig>(defaultCorrelationConfig);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
+
+  // MITRE RAG state
+  const [mitreMappings, setMitreMappings] = useState<MitreMappingResult[]>(
+    mitreService.getMockResults()
+  );
+  const [mitreMappingLoading, setMitreMappingLoading] = useState<boolean>(false);
+  const [mitreMappingError, setMitreMappingError] = useState<string | null>(null);
+
+  const runMitreMapping = async (payloads: AlertClusterPayload[]) => {
+    setMitreMappingLoading(true);
+    setMitreMappingError(null);
+    try {
+      const results = await mitreService.mapClusters(payloads);
+      setMitreMappings(results);
+    } catch (err) {
+      setMitreMappingError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setMitreMappingLoading(false);
+    }
+  };
 
   // Live Throughput
   const [eventsPerSec, setEventsPerSec] = useState<number>(1248);
@@ -482,6 +510,8 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
     setSelectedIncidentId('INC-1042');
     setCorrelationConfig(defaultCorrelationConfig);
     setIsDemoMode(true);
+    setMitreMappings(mitreService.getMockResults());
+    setMitreMappingError(null);
     setEventsPerSec(1248);
     setTotalEventsProcessed(42810);
     setAlertsPerSec(12);
@@ -514,6 +544,9 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
         isDemoMode,
         activeSourcesCount,
         totalSourcesCount,
+        mitreMappings,
+        mitreMappingLoading,
+        mitreMappingError,
         eventsPerSec,
         totalEventsProcessed,
         alertsPerSec,
@@ -538,6 +571,7 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
         updateAlertStatus,
         setIsDemoMode,
         loadDemoData,
+        runMitreMapping,
       }}
     >
       {children}
