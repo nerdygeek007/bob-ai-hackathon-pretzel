@@ -139,21 +139,49 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scenario",
         default="apt_hybrid",
-        choices=["apt_hybrid", "chaff_flood", "benign", "custom"],
-        help="Telemetry scenario or 'custom' to load sample_custom_alerts.json"
+        choices=["apt_hybrid", "chaff_flood", "benign", "custom", "real_ephemeris"],
+        help="Telemetry scenario or 'real_ephemeris' for CelesTrak NORAD satellite telemetry"
     )
-    parser.add_argument("--sector", default="Sector-4-North", help="Operational sector")
+    parser.add_argument("--sector", default=None, help="Operational sector (defaults by scenario)")
+    parser.add_argument("--satellite", help="Target satellite name or NORAD Cat ID (for real_ephemeris scenario)")
+    parser.add_argument("--sat-catalog", action="store_true", help="Display tracked defense satellites from CelesTrak NORAD catalog")
     parser.add_argument("--file", help="Path to a custom JSON or JSONL file of alerts")
     parser.add_argument("--interactive", action="store_true", help="Interactively input custom alert details")
     args = parser.parse_args()
 
+    if args.sat_catalog:
+        print_banner()
+        service = AresDefenseMcpService()
+        catalog = service.get_satellite_ephemeris()
+        print(f"\nAuthoritative CelesTrak NORAD Satellite Catalog ({len(catalog)} Tracked Defense Assets):")
+        print("-" * 75)
+        print(f"{'NORAD ID':<10} {'NAME':<24} {'ORBIT':<8} {'ALTITUDE':<12} {'PERIOD':<10} {'INCLINATION'}")
+        print("-" * 75)
+        for sat in catalog[:15]:
+            print(f"{sat['norad_cat_id']:<10} {sat['object_name']:<24} {sat['orbit_type']:<8} {str(sat['altitude_km']) + ' km':<12} {str(sat['period_minutes']) + ' min':<10} {sat['inclination_deg']}°")
+        if len(catalog) > 15:
+            print(f"... and {len(catalog) - 15} more satellites tracked.")
+        print("-" * 75)
+        sys.exit(0)
+
+    effective_sector = args.sector
+    if not effective_sector:
+        effective_sector = "Sector-Space-LEO" if args.scenario == "real_ephemeris" else "Sector-4-North"
+
     if args.interactive:
         alerts = interactive_prompt()
-        run_pipeline(custom_alerts=alerts, sector=alerts[0].sector or args.sector)
+        run_pipeline(custom_alerts=alerts, sector=alerts[0].sector or effective_sector)
     elif args.file:
-        run_pipeline(file_path=args.file, sector=args.sector)
+        run_pipeline(file_path=args.file, sector=effective_sector)
     elif args.scenario == "custom":
         custom_file = os.path.join(os.path.dirname(__file__), "data", "sample_custom_alerts.json")
-        run_pipeline(file_path=custom_file, sector=args.sector)
+        run_pipeline(file_path=custom_file, sector=effective_sector)
+    elif args.scenario == "real_ephemeris":
+        service = AresDefenseMcpService()
+        alerts = service.ephemeris_client.generate_satellite_anomaly_alerts(
+            sector=effective_sector,
+            satellite_query=args.satellite or "SAR-LUPE"
+        )
+        run_pipeline(custom_alerts=alerts, sector=effective_sector)
     else:
-        run_pipeline(scenario=args.scenario, sector=args.sector)
+        run_pipeline(scenario=args.scenario, sector=effective_sector)

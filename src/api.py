@@ -50,6 +50,7 @@ def health_check():
         "active_alerts": len(SESSION_RAW_ALERTS),
         "active_clusters": len(SESSION_CLUSTERS),
         "generated_reports": len(SESSION_REPORTS),
+        "satellites_tracked": len(mcp_service.get_satellite_ephemeris()),
         "ai_connection": mcp_service.bluf_gen.ai_client.get_status()
     }
 
@@ -58,6 +59,17 @@ def health_check():
 def get_ai_status():
     """Returns the current IBM Granite / watsonx AI connection status."""
     return mcp_service.bluf_gen.ai_client.get_status()
+
+
+@app.get("/api/satellites/ephemeris")
+def get_satellite_ephemeris(query: Optional[str] = Query(None)):
+    """Returns authoritative CelesTrak / NORAD satellite ephemeris, altitude, period, and orbital class."""
+    satellites = mcp_service.get_satellite_ephemeris(query=query)
+    return {
+        "source": "CelesTrak NORAD Open Catalog",
+        "count": len(satellites),
+        "satellites": satellites
+    }
 
 
 @app.post("/api/ingest")

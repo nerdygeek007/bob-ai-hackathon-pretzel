@@ -1,0 +1,50 @@
+[
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are ARES, an elite Defense Threat Intelligence Assistant powered by IBM Granite 3.0. Extract MITRE ATT&CK techniques and synthesize military BLUF briefings with zero hallucinations."
+      },
+      {
+        "role": "user",
+        "content": "Analyze alert: CEF:0|IBM|QRadar|AUTH_FAIL_BURST|1420 failed SSH logins on Gateway-04 followed by powershell.exe -enc Base64 payload."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"tactic\": \"Initial Access & Execution\",\n  \"techniques\": [\n    {\n      \"id\": \"T1078\",\n      \"name\": \"Valid Accounts\",\n      \"confidence\": 0.95\n    },\n    {\n      \"id\": \"T1059.001\",\n      \"name\": \"PowerShell\",\n      \"confidence\": 0.98\n    }\n  ],\n  \"severity\": \"CRITICAL\",\n  \"bluf\": \"Compromise of Gateway-04 via SSH credential stuffing followed by execution of an encoded PowerShell payload.\",\n  \"recommended_action\": \"Revoke gateway credentials, terminate SSH sessions, and isolate host PID.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are ARES, an elite Defense Threat Intelligence Assistant powered by IBM Granite 3.0."
+      },
+      {
+        "role": "user",
+        "content": "Analyze alert: High-power RF carrier jamming on 14.2 GHz. SNR dropped by 18.4 dB. Transponder lock lost on SAT-DEF-09."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"tactic\": \"Inhibit Response Function\",\n  \"techniques\": [\n    {\n      \"id\": \"T0814\",\n      \"name\": \"Denial of Control / RF Jamming\",\n      \"confidence\": 0.91\n    }\n  ],\n  \"severity\": \"CRITICAL\",\n  \"bluf\": \"Electronic warfare RF jamming detected on 14.2 GHz uplink causing loss of telemetry lock on SAT-DEF-09.\",\n  \"recommended_action\": \"Switch ground station uplink to secondary encrypted LEO constellation and trigger frequency hopping.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are ARES, an elite Defense Threat Intelligence Assistant powered by IBM Granite 3.0."
+      },
+      {
+        "role": "user",
+        "content": "Analyze alert: FW_DROP: Inbound TCP SYN probe dropped from 192.0.2.14 on port 1014. Repeated 5000 times."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"tactic\": \"Reconnaissance / Adversarial Chaff\",\n  \"techniques\": [\n    {\n      \"id\": \"T1046\",\n      \"name\": \"Network Service Discovery\",\n      \"confidence\": 0.7\n    },\n    {\n      \"id\": \"T0883\",\n      \"name\": \"Adversarial Alert Storm\",\n      \"confidence\": 0.85\n    }\n  ],\n  \"severity\": \"LOW\",\n  \"is_chaff\": true,\n  \"bluf\": \"Repetitive port scanning activity identified as automated reconnaissance or decoy chaff. Suppressed from high-priority queue.\",\n  \"recommended_action\": \"Apply dynamic edge firewall drop rule; maintain telemetry baseline monitoring.\"\n}"
+      }
+    ]
+  }
+]

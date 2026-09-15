@@ -39,6 +39,7 @@
                 <span class="text-slate-400">Sector:</span>
                 <select id="sector-select" onchange="switchSector()" class="bg-transparent text-cyan-300 font-mono font-bold outline-none cursor-pointer">
                     <option value="apt_hybrid" class="bg-slate-950 text-slate-200">Sector-4-North (APT Hybrid)</option>
+                    <option value="real_ephemeris" class="bg-slate-950 text-slate-200">Sector-Space-LEO (Real NORAD Ephemeris & EW)</option>
                     <option value="chaff_flood" class="bg-slate-950 text-slate-200">Sector-2-East (Alert Storm)</option>
                     <option value="benign" class="bg-slate-950 text-slate-200">Sector-3-Central (Routine Ops)</option>
                 </select>
@@ -267,6 +268,7 @@
                 <div class="p-2 rounded bg-slate-900/40 border border-slate-800/80 flex items-start space-x-2">
                     <span class="text-slate-500 shrink-0 text-[10px]">${a.timestamp ? a.timestamp.substring(11, 19) : '00:00:00'}Z</span>
                     <span class="px-1.5 py-0.2 rounded text-[10px] ${a.domain.includes('satellite') ? 'bg-purple-950 text-purple-300' : a.domain.includes('siem') ? 'bg-blue-950 text-blue-300' : 'bg-red-950 text-red-300'} font-mono">${a.domain.substring(0, 7).toUpperCase()}</span>
+                    ${a.raw_payload && a.raw_payload.includes('NORAD:') ? '<span class="px-1 py-0.2 rounded text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono shrink-0">🛰️ NORAD GP</span>' : ''}
                     <span class="text-slate-300 truncate">${a.raw_payload}</span>
                 </div>
             `).join("");
@@ -331,10 +333,15 @@
 
         async function switchSector() {
             const scenario = document.getElementById("sector-select").value;
+            let sector = "Sector-4-North";
+            if (scenario === "real_ephemeris") sector = "Sector-Space-LEO";
+            else if (scenario === "chaff_flood") sector = "Sector-2-East";
+            else if (scenario === "benign") sector = "Sector-3-Central";
+
             await fetchApi("/api/ingest", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ scenario: scenario, sector: "Active-Sector" })
+                body: JSON.stringify({ scenario: scenario, sector: sector, clear_session: true })
             });
             await loadWarRoomData();
         }

@@ -25,6 +25,25 @@ class SeverityLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
+class SatelliteEphemeris(BaseModel):
+    """Real General Perturbations (GP) orbital ephemeris from NORAD / CelesTrak."""
+    norad_cat_id: int = Field(..., description="NORAD Satellite Catalog Number (e.g. 31797)")
+    object_name: str = Field(..., description="Spacecraft designation (e.g. SAR-LUPE 2)")
+    object_id: str = Field(..., description="International Designator (e.g. 2007-030A)")
+    epoch: str = Field(..., description="Ephemeris UTC Epoch timestamp")
+    inclination_deg: float = Field(..., description="Orbital inclination in degrees")
+    eccentricity: float = Field(..., description="Orbital eccentricity")
+    mean_motion: float = Field(..., description="Revolutions per day")
+    ra_of_asc_node: Optional[float] = Field(None, description="Right Ascension of Ascending Node in degrees")
+    arg_of_pericenter: Optional[float] = Field(None, description="Argument of Pericenter in degrees")
+    mean_anomaly: Optional[float] = Field(None, description="Mean Anomaly in degrees")
+    bstar: Optional[float] = Field(None, description="BSTAR drag term")
+    altitude_km: Optional[float] = Field(None, description="Computed perigee altitude in km")
+    period_minutes: Optional[float] = Field(None, description="Computed orbital period in minutes")
+    orbit_type: str = Field("LEO", description="LEO, MEO, GEO, or HEO")
+    source: str = Field("CelesTrak NORAD Open Catalog", description="Authoritative orbital data source")
+
+
 class RawTelemetryAlert(BaseModel):
     """Raw incoming alert from any sensor or telemetry stream."""
     alert_id: str = Field(..., description="Unique alert identifier")

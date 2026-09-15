@@ -31,11 +31,12 @@ ARES (Automated Reconnaissance & Threat Evaluation System) is an autonomous mult
 
 ## ✨ Key Features
 
+- **Real NORAD Satellite Ephemeris Ingestion:** Ingests live orbital ephemeris and General Perturbations (GP) element sets from CelesTrak for active defense and GPS constellations (e.g. SAR-LUPE radar reconnaissance, NAVSTAR, Milstar), computes orbital altitude/period/regimes (LEO/MEO/GEO), and correlates space Electronic Warfare (EW) attacks.
 - **Multi-Domain Cross-Correlation:** Connects disjointed SIEM, Satellite RF jamming, EDR process injection, and SCADA Modbus telemetry into unified incident clusters via a NetworkX Spatio-Temporal Knowledge Graph.
 - **Shannon Entropy Anti-Chaff Filter:** Detects engineered decoy alert storms (entropy < 2.2) and suppresses 92.5% of repetitive noise while isolating stealth zero-days.
 - **Automated MITRE ATT&CK Mapping:** Classifies attacker TTPs across Enterprise and ICS matrices with confidence scores, mitigations, and evidence links.
 - **Military-Standard BLUF Synthesis:** Delivers structured commander briefings (BLUF, confirmed sensor findings, MITRE TTPs, and wargamed COA tradeoff matrices).
-- **IBM Bob MCP Server:** Exposes custom Model Context Protocol tools (`ares_ingest_telemetry`, `ares_correlate_threats`, `ares_generate_bluf`) for interactive terminal command operations.
+- **IBM Bob MCP Server:** Exposes custom Model Context Protocol tools (`ares_ingest_telemetry`, `ares_get_satellite_ephemeris`, `ares_correlate_threats`, `ares_generate_bluf`) for interactive terminal command operations.
 - **Granite Guardian Assurance:** Verifies every claim in the generated briefing against raw sensor telemetry to ensure zero hallucinations.
 
 ---
@@ -46,9 +47,9 @@ ARES (Automated Reconnaissance & Threat Evaluation System) is an autonomous mult
 |---|---|
 | **Languages** | Python 3.12, JavaScript, HTML5 |
 | **Frameworks** | FastAPI, NetworkX, Pydantic, Scipy, TailwindCSS |
-| **IBM Technologies** | IBM Bob (MCP CLI), IBM watsonx.ai (Granite 3.0 8B Instruct), watsonx Granite Guardian 3.0, watsonx.governance |
-| **Databases** | In-Memory Dynamic Spatio-Temporal Knowledge Graph |
-| **Other** | STIX 2.1, MITRE ATT&CK CTI, Model Context Protocol (MCP), Uvicorn, Pytest |
+| **IBM Technologies** | IBM Bob (MCP CLI), IBM watsonx.ai (Granite 4 & 3.0), watsonx Granite Guardian, watsonx.governance |
+| **Databases** | In-Memory Dynamic Spatio-Temporal Knowledge Graph, Persistent Disk Caching |
+| **Other** | STIX 2.1, CelesTrak NORAD GP API, MITRE ATT&CK CTI, Model Context Protocol (MCP), Uvicorn, Pytest |
 
 ---
 
@@ -61,11 +62,11 @@ ARES (Automated Reconnaissance & Threat Evaluation System) is an autonomous mult
 ├── .gitignore               # Secrets and build artifacts exclusions
 ├── .github/workflows/       # Automated submission validation action
 ├── src/                     # Complete application source code
-│   ├── data/                # MITRE CTI loader, synthetic scenarios, & dataset builders
+│   ├── data/                # MITRE CTI loader, CelesTrak ephemeris client, synthetic scenarios
 │   ├── engine/              # STIX 2.1 normalizer, anti-chaff filter, spatio-temporal graph
-│   ├── ai/                  # watsonx Granite 3.0 client, MITRE mapper, BLUF generator
+│   ├── ai/                  # watsonx Granite client, MITRE mapper, BLUF generator
 │   ├── dashboard/           # Tactical Commander War Room Web UI
-│   ├── tests/               # Pytest automated test suite (10/10 passed)
+│   ├── tests/               # Pytest automated test suite (21/21 passed)
 │   ├── mcp_server.py        # IBM Bob Model Context Protocol Server
 │   ├── api.py               # FastAPI REST backend server
 │   ├── cli.py               # Interactive terminal CLI tool
@@ -91,7 +92,7 @@ Copy these exact steps from docs/setup-guide.md:
 
 ```powershell
 # 1. Clone the repo
-git clone https://github.com/drijesh-ppatel/bob-ai-hackathon-pretzel.git
+git clone https://github.com/nerdygeek007/bob-ai-hackathon-pretzel.git
 cd bob-ai-hackathon-pretzel
 
 # 2. Activate Python environment
@@ -103,8 +104,10 @@ pip install -r src/requirements.txt
 # 4. Run automated test suite
 python -m pytest src/tests/ -v
 
-# 5. Run full 5-step pipeline in terminal
+# 5. Run full 5-step pipeline in terminal (APT Hybrid or Real Satellite Ephemeris)
 python -m src.cli --scenario apt_hybrid
+python -m src.cli --scenario real_ephemeris
+python -m src.cli --sat-catalog
 
 # 6. Launch Tactical Commander War Room UI
 python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
@@ -126,7 +129,7 @@ Open http://127.0.0.1:8000 in your browser.
 
 ## ⚠️ Known Limitations & Operational Modes
 
-- **Classified Telemetry & OPSEC Compliance**: Production military satellite ephemeris and tactical datalinks (e.g., Link 16, classified constellation C2) are restricted under operational security (OPSEC). ARES operates on physics-grounded telemetry conforming directly to open NASA CCSDS and ESA spacecraft anomaly telemetry standards (e.g., OPS-SAT / PDS telemetry formats), normalized to STIX 2.1 cross-domain entities. Plug-and-play adapter connectors (`TelemetryIngestionEngine`) enable instantaneous drop-in integration into sovereign defense-grade telemetry buses when deployed into classified enclaves.
+- **Classified Telemetry & OPSEC Compliance**: While real-time orbital ephemeris is dynamically ingested from authoritative open CelesTrak NORAD General Perturbations (GP) catalogs for active defense satellites (e.g. SAR-LUPE, NAVSTAR GPS, Milstar), classified military payload datalinks (e.g., Link 16, restricted constellation C2) remain protected under defense OPSEC boundaries. ARES models spacecraft anomaly events on open NASA CCSDS and ESA spacecraft anomaly standards (e.g., OPS-SAT / PDS telemetry formats), normalized to STIX 2.1 cross-domain entities. Plug-and-play adapter connectors (`TelemetryIngestionEngine`) enable instantaneous drop-in integration into sovereign defense-grade telemetry buses when deployed into classified enclaves.
 - **Resilient Multi-Tier AI Architecture (Cloud vs. Edge Air-Gap)**: 
   - **Live Cloud Production Mode**: Interoperates directly with IBM watsonx.ai Granite foundation models (`ibm/granite-4-h-small` and Granite 3.0 in Frankfurt `eu-de`) and live IBM Bob Cloud Agent gateways (`api.us-east.bob.ibm.com`) via secure IBM Cloud IAM, empowered by persistent on-disk token-saver caching and micro-budget prompt engineering (>93% token reduction).
   - **Air-Gapped / Edge Sovereign Mode**: In disconnected forward-operating bases (FOBs) or under electronic warfare / satellite communications blackout, ARES seamlessly runs offline using pre-indexed MITRE ATT&CK CTI embeddings, local knowledge graph traversal, and deterministic military defense templates—guaranteeing 0-token overhead, 100% data sovereignty, and zero operational downtime.

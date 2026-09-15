@@ -1,0 +1,37 @@
+[
+  {
+    "test_id": "TEST-CYBER-001",
+    "input_payload": "CEF:0|IBM|QRadar|AUTH_FAIL_BURST|1420 failed logins from 198.51.100.44",
+    "expected_techniques": [
+      "T1078"
+    ],
+    "expected_severity": "HIGH",
+    "is_threat": true
+  },
+  {
+    "test_id": "TEST-SAT-002",
+    "input_payload": "RF carrier jamming detected on 14.2 GHz. Transponder lock lost.",
+    "expected_techniques": [
+      "T0814"
+    ],
+    "expected_severity": "CRITICAL",
+    "is_threat": true
+  },
+  {
+    "test_id": "TEST-BENIGN-003",
+    "input_payload": "INFO: Scheduled weekly authorized vulnerability scanner 10.3.0.254 scanned 50 hosts.",
+    "expected_techniques": [],
+    "expected_severity": "LOW",
+    "is_threat": false
+  },
+  {
+    "test_id": "TEST-EDR-004",
+    "input_payload": "powershell.exe -enc Base64 payload spawned by svc_satcomm with LSASS dump.",
+    "expected_techniques": [
+      "T1059",
+      "T1003"
+    ],
+    "expected_severity": "CRITICAL",
+    "is_threat": true
+  }
+]

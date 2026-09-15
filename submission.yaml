@@ -34,6 +34,7 @@ submission:
     and generates wargamed BLUF investigation summaries for commanders.
 
   key_features:
+    - "Real-World NORAD Satellite Ephemeris Ingestion dynamically computing orbital altitude, period, and regimes (LEO/MEO/GEO)"
     - "Multi-Domain Cross-Correlation linking SIEM, Satellite RF, EDR, and SCADA alerts into unified incident clusters"
     - "Shannon Entropy Adversarial Chaff Filter suppressing 92.5% of decoy alert storms while preserving stealth zero-days"
     - "Automated MITRE ATT&CK Enterprise and ICS TTP mapping with dynamic matrix heatmaps"
@@ -43,9 +44,9 @@ submission:
   tech_stack:
     languages: ["Python", "JavaScript", "HTML"]
     frameworks: ["FastAPI", "NetworkX", "Pydantic", "TailwindCSS"]
-    ibm_technologies: ["IBM Bob CLI", "IBM watsonx.ai Granite 3.0", "watsonx Granite Guardian", "watsonx.governance"]
-    databases: ["In-Memory Temporal Knowledge Graph"]
-    other: ["STIX 2.1", "MITRE ATT&CK CTI", "Model Context Protocol (MCP)", "Uvicorn", "Pytest"]
+    ibm_technologies: ["IBM Bob CLI", "IBM watsonx.ai Granite 4 & 3.0", "watsonx Granite Guardian", "watsonx.governance"]
+    databases: ["In-Memory Temporal Knowledge Graph", "Persistent On-Disk Token-Saver Cache"]
+    other: ["STIX 2.1", "CelesTrak NORAD GP API", "MITRE ATT&CK CTI", "Model Context Protocol (MCP)", "Uvicorn", "Pytest"]
 
   what_we_are_most_proud_of: >
     The Spatio-Temporal Knowledge Graph and Shannon Entropy anti-chaff filter that
@@ -53,11 +54,11 @@ submission:
     coupled with zero-hallucination Granite Guardian validation.
 
   known_limitations: >
-    In compliance with defense OPSEC boundaries, production military satellite ephemeris and tactical datalinks
-    are classified; ARES ingests physics-grounded telemetry conforming to open NASA CCSDS and ESA spacecraft anomaly
-    standards (STIX 2.1 mapped). Additionally, while live operations harness IBM watsonx.ai Granite foundation models
-    in Frankfurt (eu-de) and live IBM Bob Cloud Agents, forward air-gapped deployments fall back to zero-token
-    deterministic defense templates and local MITRE CTI graphs for guaranteed mission continuity.
+    While real-time orbital ephemeris is dynamically fetched from authoritative open CelesTrak NORAD feeds for
+    active defense satellites, production tactical payload datalinks (e.g. Link 16 C2) are restricted under defense OPSEC.
+    ARES models spacecraft anomaly events on open NASA CCSDS and ESA standards (STIX 2.1 mapped). Additionally,
+    while live operations harness IBM watsonx.ai Granite foundation models in Frankfurt (eu-de) and live IBM Bob Cloud Agents,
+    forward air-gapped deployments fall back to zero-token deterministic defense templates and local MITRE CTI graphs for guaranteed mission continuity.
 
 # =============================================================================
 # ARTIFACT LOCATIONS

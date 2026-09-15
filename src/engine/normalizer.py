@@ -43,6 +43,21 @@ class TelemetryNormalizer:
         for asset in re.findall(asset_pattern, text):
             iocs.add(f"defense-asset:{asset}")
 
+        # NORAD Catalog ID pattern
+        norad_pattern = r'\b(?:NORAD[:\s-]?|\bCATNR[:\s-]?)(\d{4,6})\b'
+        for norad in re.findall(norad_pattern, text, re.IGNORECASE):
+            iocs.add(f"norad-cat-id:{norad}")
+
+        # Real Spacecraft / Satellite Identifiers
+        sat_names = r'\b(SAR-LUPE\s*\d+|NAVSTAR\s*\d+|COSMO-SkyMed\s*\d*|SAPPHIRE|PRAETORIAN\s*[A-Z0-9_]*|MILSTAR\s*\d*|WGS-\d+)\b'
+        for sname in re.findall(sat_names, text, re.IGNORECASE):
+            iocs.add(f"defense-satellite-asset:{sname.strip()}")
+
+        # RF Bands & Jamming indicators
+        rf_pattern = r'\b(Ku-Band|Ka-Band|X-Band|C-Band|S-Band|UHF|SHF)\b'
+        for rf in re.findall(rf_pattern, text, re.IGNORECASE):
+            iocs.add(f"rf-band:{rf.upper()}")
+
         return sorted(list(iocs))
 
     @staticmethod
@@ -51,11 +66,11 @@ class TelemetryNormalizer:
         payload_lower = alert.raw_payload.lower()
 
         # Critical triggers
-        if any(w in payload_lower for w in ["critical", "zero_day", "unauthorized modbus", "transponder lock lost", "rf jamming", "dirty pipe"]):
+        if any(w in payload_lower for w in ["critical", "zero_day", "unauthorized modbus", "transponder lock lost", "rf jamming", "carrier jamming", "dirty pipe"]):
             return SeverityLevel.CRITICAL
 
         # High triggers
-        if any(w in payload_lower for w in ["failed ssh logins", "auth_fail_burst", "powershell.exe", "lsass", "c2 node", "cobalt strike", "beaconing"]):
+        if any(w in payload_lower for w in ["failed ssh logins", "auth_fail_burst", "powershell.exe", "lsass", "c2 node", "cobalt strike", "beaconing", "ephemeris_anomaly", "ephemeris drift", "telemetry lock disrupted", "doppler"]):
             return SeverityLevel.HIGH
 
         # Medium triggers

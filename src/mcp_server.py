@@ -26,6 +26,7 @@ from src.data.synthetic_scenarios import (
     generate_adversarial_chaff_flood,
     generate_benign_background_noise
 )
+from src.data.satellite_ephemeris_client import SatelliteEphemerisClient
 from src.ai.mitre_mapper import MitreMapper
 from src.ai.bluf_generator import BlufGenerator
 from src.ai.watsonx_client import WatsonxClient
@@ -44,6 +45,7 @@ class AresDefenseMcpService:
         self.graph_engine = SpatioTemporalGraphEngine()
         self.mitre_mapper = MitreMapper()
         self.bluf_gen = BlufGenerator()
+        self.ephemeris_client = SatelliteEphemerisClient()
 
     def ingest_telemetry(
         self,
@@ -78,6 +80,8 @@ class AresDefenseMcpService:
                     for line in content.splitlines():
                         if line.strip():
                             alerts.append(RawTelemetryAlert(**json.loads(line)))
+        elif scenario in ["real_ephemeris", "satellite_orbit"]:
+            alerts = self.ephemeris_client.generate_satellite_anomaly_alerts(sector=sector)
         elif scenario == "chaff_flood":
             alerts = generate_adversarial_chaff_flood(sector=sector, count=40)
         elif scenario == "benign":
@@ -210,18 +214,23 @@ class AresDefenseMcpService:
             ]
         }
 
+    def get_satellite_ephemeris(self, query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Returns real-world satellite ephemeris parameters from CelesTrak NORAD catalog."""
+        catalog = self.ephemeris_client.get_catalog(query=query)
+        return [sat.model_dump() for sat in catalog]
+
 
 # MCP Tool Definitions for IBM Bob
 TOOLS_REGISTRY = [
     {
         "name": "ares_ingest_telemetry",
-        "description": "Ingests multi-domain defense alerts (SIEM CEF, Satellite RF, EDR process logs, OSINT, or Custom file).",
+        "description": "Ingests multi-domain defense alerts (SIEM CEF, Satellite RF, EDR process logs, OSINT, Real Ephemeris, or Custom file).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "scenario": {
                     "type": "string",
-                    "enum": ["apt_hybrid", "chaff_flood", "benign", "custom"],
+                    "enum": ["apt_hybrid", "chaff_flood", "benign", "custom", "real_ephemeris"],
                     "description": "Scenario to ingest"
                 },
                 "sector": {
@@ -231,6 +240,19 @@ TOOLS_REGISTRY = [
                 "file_path": {
                     "type": "string",
                     "description": "Optional path to custom JSON alerts file"
+                }
+            }
+        }
+    },
+    {
+        "name": "ares_get_satellite_ephemeris",
+        "description": "Queries authoritative CelesTrak / NORAD orbital ephemeris, altitude, period, and regime for defense satellites.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional search filter: satellite name (e.g. SAR-LUPE), NORAD Cat ID (e.g. 31797), or orbit class (LEO/MEO/GEO)"
                 }
             }
         }
@@ -329,6 +351,8 @@ def run_stdio_mcp_server():
                     output = service.correlate_alerts(sector=args.get("sector"))
                 elif tool_name == "ares_generate_bluf":
                     output = service.generate_bluf(cluster_id=args.get("cluster_id"))
+                elif tool_name == "ares_get_satellite_ephemeris":
+                    output = service.get_satellite_ephemeris(query=args.get("query"))
                 else:
                     output = {"error": f"Unknown tool: {tool_name}"}
 

@@ -1,0 +1,52 @@
+[
+  {
+    "alert_id": "CUSTOM-SAT-001",
+    "timestamp": "2026-09-15T04:10:00Z",
+    "domain": "satellite_ew",
+    "source_name": "DEF-SAT-LEO-08",
+    "raw_payload": "High-power spot-beam RF noise jamming detected on Ku-band uplink 14.2 GHz. SNR degraded by 19.5 dB over Sector-Custom Ground Station.",
+    "sector": "Sector-Custom-Delta",
+    "target_entity": "SAT-GROUND-UPLINK-01",
+    "source_ip": "198.51.100.99",
+    "destination_ip": "10.4.1.15",
+    "event_code": "SAT_RF_JAM_CRIT",
+    "metadata": {
+      "frequency_ghz": 14.2,
+      "snr_drop_db": 19.5,
+      "confidence": 0.95
+    }
+  },
+  {
+    "alert_id": "CUSTOM-SIEM-002",
+    "timestamp": "2026-09-15T04:11:30Z",
+    "domain": "cyber_siem",
+    "source_name": "QRadar-Perimeter-GW",
+    "raw_payload": "CEF:0|IBM|QRadar|7.5|1002|Brute-Force Credential Stuffing|8|src=198.51.100.99 dst=10.4.1.15 spt=44321 dpt=22 msg=1250 failed root auth attempts followed by successful session token hijacking.",
+    "sector": "Sector-Custom-Delta",
+    "target_entity": "10.4.1.15",
+    "source_ip": "198.51.100.99",
+    "destination_ip": "10.4.1.15",
+    "event_code": "AUTH_BRUTE_SUCCESS",
+    "metadata": {
+      "attack_vector": "Credential Stuffing",
+      "mitre_technique": "T1078"
+    }
+  },
+  {
+    "alert_id": "CUSTOM-EDR-003",
+    "timestamp": "2026-09-15T04:12:45Z",
+    "domain": "cyber_edr",
+    "source_name": "CrowdStrike-Sensor-GW15",
+    "raw_payload": "Process execution detected: powershell.exe -enc SQBFAFgAIAAoAE4AZQB3AC... spawned by svc_telemetry (PID 4092) injecting unauthorized Modbus function code 0x05 into antenna_stepper_plc.dll.",
+    "sector": "Sector-Custom-Delta",
+    "target_entity": "10.4.1.15",
+    "source_ip": "10.4.1.15",
+    "destination_ip": "10.4.1.200",
+    "event_code": "PROC_INJECTION_ICS",
+    "metadata": {
+      "process_name": "powershell.exe",
+      "target_service": "antenna_stepper_plc.dll",
+      "mitre_technique": "T1059.001"
+    }
+  }
+]

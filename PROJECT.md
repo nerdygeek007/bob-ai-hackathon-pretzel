@@ -135,6 +135,7 @@ All operations can be executed with 1-click batch scripts:
 
 ---
 
+- **2026-09-15**: Integrated **Real Public Satellite Ephemeris Ingestion** via CelesTrak NORAD General Perturbations (GP) API (`src/data/satellite_ephemeris_client.py` and `cached_satellite_ephemeris.json`): calculates real-world orbital altitude, period, and regimes (LEO/MEO/GEO) for defense assets (SAR-LUPE, GPS NAVSTAR), extracts `norad-cat-id` & `defense-satellite-asset` STIX 2.1 IOCs, exposes CLI `--scenario real_ephemeris` & `--sat-catalog`, adds `/api/satellites/ephemeris` REST endpoint & `ares_get_satellite_ephemeris` MCP tool, and created `src/tests/test_satellite_ephemeris.py` bringing automated test suite to 21/21 passed.
 - **2026-09-15**: Refined known limitations and operational architecture documentation (`README.md`, `submission.yaml`): articulated defense OPSEC telemetry compliance (NASA CCSDS/ESA standards with plug-and-play adapter connectors) and resilient multi-tier AI execution (Live IBM watsonx.ai Granite 4 / IBM Bob Cloud vs. Air-Gapped Zero-Token Edge mode).
 - **2026-09-15**: Connected and verified live **IBM watsonx.ai Foundation Models** in `eu-de` (Frankfurt) using `ibm/granite-4-h-small` and project `793d5a80-258a-4de1-b962-6f8c2a8987fa`, achieving 100% live cloud text generation with zero fallback errors.
 - **2026-09-15**: Integrated live IBM Bob (`BOB_API_KEY`) and IBM Cloud watsonx.ai (`WATSONX_API_KEY`), verified Bobcoin consumption across 5 cloud tasks, added `test_bob_live.bat` and `test_watsonx_live.bat`.
