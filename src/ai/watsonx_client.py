@@ -10,8 +10,12 @@ import json
 import requests
 from typing import Dict, Any, Optional
 
-DEFAULT_MODEL_ID = "ibm/granite-3-8b-instruct"
+DEFAULT_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-4-h-small")
 DEFAULT_GUARDIAN_MODEL_ID = "ibm/granite-guardian-3.0-8b"
+DEFAULT_MAX_NEW_TOKENS = int(os.getenv("WATSONX_MAX_NEW_TOKENS", "160"))
+
+# In-memory prompt cache to prevent redundant cloud token consumption
+_IN_MEMORY_AI_CACHE: Dict[str, str] = {}
 
 
 def _load_dotenv():
@@ -101,14 +105,22 @@ class WatsonxClient:
         prompt: str,
         system_prompt: str = "You are ARES, an elite Defense Cyber Intelligence AI Assistant powered by IBM Granite 3.0.",
         model_id: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: Optional[int] = None,
         temperature: float = 0.2
     ) -> str:
-        """Generates text from Granite 3.0, falling back to local deterministic generation if offline."""
+        """Generates text from Granite foundation model with prompt caching and token optimization."""
         target_model = model_id or self.model_id
+        effective_max_tokens = max_tokens or DEFAULT_MAX_NEW_TOKENS
+
+        # Check in-memory cache to save 100% of tokens on repeated or identical queries
+        cache_key = f"{target_model}:{system_prompt}:{prompt}"
+        if cache_key in _IN_MEMORY_AI_CACHE:
+            return _IN_MEMORY_AI_CACHE[cache_key]
 
         if not self.is_live:
-            return self._local_fallback_generate(prompt, system_prompt)
+            res = self._local_fallback_generate(prompt, system_prompt)
+            _IN_MEMORY_AI_CACHE[cache_key] = res
+            return res
 
         # Tier 1: Attempt direct IBM watsonx.ai REST generation if IAM API key is available
         if self.watsonx_api_key and len(self.watsonx_api_key) < 100:
@@ -133,7 +145,7 @@ class WatsonxClient:
                         "input": f"{system_prompt}\n\n{prompt}",
                         "parameters": {
                             "decoding_method": "greedy",
-                            "max_new_tokens": max_tokens,
+                            "max_new_tokens": effective_max_tokens,
                             "temperature": temperature,
                             "repetition_penalty": 1.1
                         }
@@ -142,7 +154,9 @@ class WatsonxClient:
                     if resp.status_code == 200:
                         results = resp.json().get("results", [])
                         if results:
-                            return results[0].get("generated_text", "").strip()
+                            generated_txt = results[0].get("generated_text", "").strip()
+                            _IN_MEMORY_AI_CACHE[cache_key] = generated_txt
+                            return generated_txt
                     else:
                         print(f"[ARES-AI] watsonx.ai REST returned status {resp.status_code}. Profile status on dataplatform.cloud.ibm.com required.")
                 else:
@@ -151,7 +165,9 @@ class WatsonxClient:
                 print(f"[ARES-AI] watsonx.ai connection exception: {e}")
 
         # Tier 2: Graceful fallback to deterministic high-fidelity Granite reasoning
-        return self._local_fallback_generate(prompt, system_prompt)
+        res = self._local_fallback_generate(prompt, system_prompt)
+        _IN_MEMORY_AI_CACHE[cache_key] = res
+        return res
 
     def verify_grounding_with_guardian(
         self,

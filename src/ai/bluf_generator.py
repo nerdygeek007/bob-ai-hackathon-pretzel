@@ -95,20 +95,28 @@ class BlufGenerator:
             f"Bayesian threat confidence calculated at {int(cluster.bayesian_threat_confidence * 100)}%."
         ]
 
-        # 3. Generate BLUF narrative via watsonx Granite 3.0
-        prompt = (
-            f"Synthesize a military Bottom Line Up Front (BLUF) briefing for Incident {cluster.cluster_id}.\n"
-            f"Sector: {cluster.sector}\n"
-            f"Threat Actor: {cluster.primary_threat_actor}\n"
-            f"Severity: {cluster.overall_severity.value}\n"
-            f"MITRE Techniques: {', '.join(t.technique_id + ' (' + t.name + ')' for t in mitre_ttps)}\n"
-            f"Alerts:\n" + "\n".join(f"- {a.name}: {a.description}" for a in cluster.alerts[:5])
-        )
+        # 3. Generate BLUF narrative via watsonx Granite (with Token Optimization)
+        if cluster.overall_severity == SeverityLevel.LOW:
+            # Zero-token deterministic fast path for benign/low-severity events
+            bluf_narrative = (
+                f"Routine operational telemetry verified within normal parameters in {cluster.sector}. "
+                "No hostile adversary intrusion or unauthorized command execution detected."
+            )
+        else:
+            # Token-condensed prompt: top 3 alerts, 80-char snippets, technique IDs only
+            alert_snippets = [f"- {a.name}: {a.description[:85]}" for a in cluster.alerts[:3]]
+            prompt = (
+                f"Synthesize a military Bottom Line Up Front (BLUF) briefing for Incident {cluster.cluster_id}.\n"
+                f"Sector: {cluster.sector} | Threat Actor: {cluster.primary_threat_actor} | Severity: {cluster.overall_severity.value}\n"
+                f"MITRE Techniques: {', '.join(t.technique_id for t in mitre_ttps[:4])}\n"
+                f"Key Telemetry:\n" + "\n".join(alert_snippets)
+            )
 
-        bluf_narrative = self.ai_client.generate_text(
-            prompt=prompt,
-            system_prompt="You are ARES, an elite Defense Intelligence AI Assistant. Provide a 2-sentence decisive BLUF."
-        )
+            bluf_narrative = self.ai_client.generate_text(
+                prompt=prompt,
+                system_prompt="You are ARES, an elite Defense Intelligence AI. Provide a 2-sentence decisive BLUF.",
+                max_tokens=140
+            )
 
         # 4. Generate provenance citations
         citations = ProvenanceTracker.generate_citations(cluster)
