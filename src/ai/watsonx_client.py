@@ -140,7 +140,7 @@ class WatsonxClient:
 
         # 1. Check persistent on-disk cache to guarantee 0 tokens on repeated queries
         cache_key = hashlib.sha256(f"{target_model}:{system_prompt}:{prompt}".encode("utf-8")).hexdigest()
-        if cache_key in _PERSISTENT_AI_CACHE:
+        if cache_key in _PERSISTENT_AI_CACHE and _PERSISTENT_AI_CACHE[cache_key].strip():
             return _PERSISTENT_AI_CACHE[cache_key]
 
         token_saver_active = os.getenv("ARES_TOKEN_SAVER_MODE", "true").lower() in ["true", "1", "yes"]
@@ -185,9 +185,10 @@ class WatsonxClient:
                         results = resp.json().get("results", [])
                         if results:
                             generated_txt = results[0].get("generated_text", "").strip()
-                            _PERSISTENT_AI_CACHE[cache_key] = generated_txt
-                            _save_disk_cache(_PERSISTENT_AI_CACHE)
-                            return generated_txt
+                            if generated_txt:
+                                _PERSISTENT_AI_CACHE[cache_key] = generated_txt
+                                _save_disk_cache(_PERSISTENT_AI_CACHE)
+                                return generated_txt
                     else:
                         print(f"[ARES-AI] watsonx.ai REST returned status {resp.status_code}.")
                 else:
