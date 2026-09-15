@@ -11,6 +11,9 @@
 | Field | Value |
 |---|---|
 | **Workspace** | `bob-ai-hackathon-pretzel` |
+| **IBM Bob Account** | `chaitanythakar@gmail.com` |
+| **Bob Plan** | Trial (Active Bobcoin Balance) |
+| **Bob Gateway Region** | `United States (East)` (`api.us-east.bob.ibm.com`) |
 | **Active Mode** | Code & Architect Mode |
 | **Agent Tools Used** | File Editing, Terminal Execution, Python Virtual Environment, Pytest |
 | **MCP Server Configured** | `src/mcp_server.py` (`ares_ingest_telemetry`, `ares_correlate_threats`, `ares_generate_bluf`) |

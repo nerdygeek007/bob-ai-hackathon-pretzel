@@ -12,11 +12,11 @@ team:
   name: "Pretzel"                             # REQUIRED — e.g., "Orion Squad"
   track: "AI"                                 # REQUIRED — one of: AI | DevOps | Sustainability | Open
   lead:
-    name: "Chaitanya"                         # REQUIRED — e.g., "Alice Chen"
-    email: "chaitanya@pretzel.dev"            # REQUIRED — e.g., "alice.chen@ibm.com"
+    name: "Chaitanya Thakar"                  # REQUIRED — e.g., "Alice Chen"
+    email: "chaitanythakar@gmail.com"         # REQUIRED — e.g., "alice.chen@ibm.com"
   members:
-    - name: "Chaitanya"                       # REQUIRED — Team member 1
-      email: "chaitanya@pretzel.dev"
+    - name: "Chaitanya Thakar"                # REQUIRED — Team member 1
+      email: "chaitanythakar@gmail.com"
 
 submission:
   title: "ARES: AI Threat Intelligence Correlation & Alert Prioritisation Assistant"
