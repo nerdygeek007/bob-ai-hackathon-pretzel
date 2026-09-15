@@ -23,6 +23,7 @@
 ```
 D:\ibm\bob-ai-hackathon-pretzel\
 ├── run.bat                          # Starts the Tactical War Room server (http://127.0.0.1:8000)
+├── stream_siem.bat                  # 1-Click continuous SIEM telemetry streamer (10 EPS)
 ├── stop.bat                         # Stops the active server process cleanly
 ├── restart.bat                      # Restarts the server
 ├── test.bat                         # Runs the full test suite (pytest + benchmarks + CLI)
@@ -49,17 +50,21 @@ D:\ibm\bob-ai-hackathon-pretzel\
     │   ├── bluf_generator.py        # BLUF executive summarizer & COA wargamer
     │   └── provenance_tracker.py    # SHA-256 cryptographic provenance verification
     ├── engine/                      # Core correlation and processing engine
-    │   ├── schemas.py               # Pydantic data schemas (STIX 2.1, Alerts, Clusters, BLUF)
-    │   ├── normalizer.py            # Cross-domain telemetry normalizer (CEF/Syslog/RF)
+    │   ├── schemas.py               # Pydantic data schemas (STIX 2.1, OCSF v1.1, CoT, XAI)
+    │   ├── normalizer.py            # Cross-domain telemetry normalizer (CEF/Syslog/OCSF/CoT)
     │   ├── anti_chaff_filter.py     # Shannon Entropy alert storm & decoy suppressor
-    │   └── spatio_temporal_graph.py # Spatio-temporal graph correlation engine
+    │   └── spatio_temporal_graph.py # Spatio-temporal graph correlation & XAI engine
     ├── data/                        # Datasets, MITRE matrices, and fine-tuning data
+    │   ├── siem_simulator.py        # High-throughput SIEM simulator (CEF, EDR, OCSF, CoT)
     │   ├── mitre_attack_loader.py   # MITRE ATT&CK Enterprise and ICS matrix loader
+    │   ├── satellite_ephemeris_client.py # Real NORAD CelesTrak ephemeris client
     │   ├── synthetic_scenarios.py   # Multi-domain cyber-physical telemetry generator
     │   └── training_builder.py      # Granite fine-tune JSONL & evaluation benchmark builder
     ├── dashboard/                   # Tactical Commander War Room Web UI
-    │   └── index.html               # Live operational dashboard
+    │   └── index.html               # Live operational dashboard with XAI progress bars
     └── tests/                       # Automated testing & validation suite
+        ├── test_siem_simulator.py   # SIEM simulator, OCSF, CoT, and XAI test suite
+        ├── test_satellite_ephemeris.py # NORAD CelesTrak ephemeris test suite
         ├── test_ares_engine.py      # Unit tests for core engine modules
         ├── test_api_endpoints.py    # Integration tests for FastAPI endpoints
         ├── test_submission_validator.py # Hackathon schema & CI validation tests
@@ -135,6 +140,14 @@ All operations can be executed with 1-click batch scripts:
 
 ---
 
+- **2026-09-15**: Implemented **SIEM & Multi-Source Telemetry Simulator (`alrt-agent` style)** and **Explainable AI (XAI) Feature Attribution**:
+  - `src/data/siem_simulator.py`: Generates high-volume heterogeneous telemetry including IBM QRadar CEF, CrowdStrike EDR, Suricata Syslog, OCSF v1.1 Class 2001 Finding JSON, and Cursor-on-Target (CoT) MIL-STD-2525 tracks.
+  - `stream_siem.bat`: 1-click continuous telemetry streaming script pushing live events directly to `/api/ingest`.
+  - `src/engine/normalizer.py`: Normalizes OCSF and CoT schemas into standard STIX 2.1 entities with SHA-256 cryptographic provenance hashes.
+  - `src/engine/spatio_temporal_graph.py`: Calculates transparent SHAP-style Explainable AI (XAI) feature attribution decision weights (Multi-Domain Sensor Fusion, MITRE TTPs, Shannon Entropy, Asset Criticality) summing to 100%.
+  - `src/mcp_server.py` & `src/api.py`: Added `ares_simulate_siem` MCP tool, `/api/simulate` endpoint, and full OCSF/CoT parsing.
+  - `src/dashboard/index.html`: Added visual XAI Feature Attribution cards with interactive decision weight progress bars.
+  - `src/tests/test_siem_simulator.py`: Added 11 comprehensive unit & integration tests; full pytest test suite now passes **32/32 tests (100% green)**.
 - **2026-09-15**: Refined `README.md` and `submission.yaml`: incorporated empirical success rate benchmark table into `What We're Most Proud Of` (100% Recall, 95.8% Precision, 0.978 F1, 92.5% Chaff Suppression, 0.980 Grounding, 0.12s latency) and condensed `Known Limitations` into concise, punchy lines.
 - **2026-09-15**: Integrated **Real Public Satellite Ephemeris Ingestion** via CelesTrak NORAD General Perturbations (GP) API (`src/data/satellite_ephemeris_client.py` and `cached_satellite_ephemeris.json`): calculates real-world orbital altitude, period, and regimes (LEO/MEO/GEO) for defense assets (SAR-LUPE, GPS NAVSTAR), extracts `norad-cat-id` & `defense-satellite-asset` STIX 2.1 IOCs, exposes CLI `--scenario real_ephemeris` & `--sat-catalog`, adds `/api/satellites/ephemeris` REST endpoint & `ares_get_satellite_ephemeris` MCP tool, and created `src/tests/test_satellite_ephemeris.py` bringing automated test suite to 21/21 passed.
 - **2026-09-15**: Refined known limitations and operational architecture documentation (`README.md`, `submission.yaml`): articulated defense OPSEC telemetry compliance (NASA CCSDS/ESA standards with plug-and-play adapter connectors) and resilient multi-tier AI execution (Live IBM watsonx.ai Granite 4 / IBM Bob Cloud vs. Air-Gapped Zero-Token Edge mode).

@@ -14,7 +14,9 @@ from src.engine.schemas import (
     NormalizedStixEntity,
     IncidentCluster,
     SeverityLevel,
-    TelemetryDomain
+    TelemetryDomain,
+    XAiExplanation,
+    XAiFeatureAttribution
 )
 from src.engine.anti_chaff_filter import AntiChaffFilter
 
@@ -84,7 +86,7 @@ class SpatioTemporalGraphEngine:
                 if t1 and t2:
                     delta_minutes = abs((t1 - t2).total_seconds()) / 60.0
                     if delta_minutes <= self.time_window_minutes:
-                        # If both alerts are HIGH or CRITICAL, or cross-domain space+cyber
+                        # If both alerts are HIGH or CRITICAL, or cross-domain space+cyber+tactical
                         sev1 = alert_nodes[i].severity
                         sev2 = alert_nodes[j].severity
                         dom1 = alert_nodes[i].domain
@@ -95,8 +97,8 @@ class SpatioTemporalGraphEngine:
                             sev2 in [SeverityLevel.CRITICAL, SeverityLevel.HIGH]
                         )
                         is_cross_domain_hybrid = (dom1 != dom2) and (
-                            TelemetryDomain.SATELLITE_EW in [dom1, dom2] or
-                            TelemetryDomain.CYBER_EDR in [dom1, dom2]
+                            dom1 in [TelemetryDomain.SATELLITE_EW, TelemetryDomain.CYBER_EDR, TelemetryDomain.TACTICAL_COT, TelemetryDomain.OCSF_SECURITY] or
+                            dom2 in [TelemetryDomain.SATELLITE_EW, TelemetryDomain.CYBER_EDR, TelemetryDomain.TACTICAL_COT, TelemetryDomain.OCSF_SECURITY]
                         )
 
                         if is_high_risk or is_cross_domain_hybrid:
@@ -136,6 +138,76 @@ class SpatioTemporalGraphEngine:
         return round(min(0.99, max(0.40, combined_prob)), 2)
 
     @classmethod
+    def _compute_xai_explanation(
+        cls,
+        cluster_alerts: List[NormalizedStixEntity],
+        domains_set: Set[TelemetryDomain],
+        overall_sev: SeverityLevel,
+        bayesian_conf: float,
+        chaff_meta: Dict[str, Any]
+    ) -> XAiExplanation:
+        """Computes transparent Explainable AI (XAI) feature attribution breakdown (SHAP-style)."""
+        attributions: List[XAiFeatureAttribution] = []
+
+        num_domains = len(domains_set)
+        has_cross_domain = num_domains >= 2
+        critical_alert_count = sum(1 for a in cluster_alerts if a.severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH])
+
+        # 1. Multi-Domain Sensor Fusion Weight (15 - 40)
+        fusion_score = min(40.0, num_domains * 15.0 if has_cross_domain else 12.0)
+        attributions.append(XAiFeatureAttribution(
+            feature_name="Multi-Domain Cross-Sensor Fusion",
+            importance_weight=fusion_score,
+            signal_direction="RISK_INCREASING" if has_cross_domain else "NEUTRAL",
+            evidence_rationale=f"Simultaneous correlation across {num_domains} domain(s): {sorted([d.value for d in domains_set])}."
+        ))
+
+        # 2. MITRE TTP & Kinetic Threat Signal (10 - 30)
+        ttp_score = 30.0 if overall_sev == SeverityLevel.CRITICAL else (22.0 if overall_sev == SeverityLevel.HIGH else 12.0)
+        attributions.append(XAiFeatureAttribution(
+            feature_name="MITRE ATT&CK & Sequence Alignment",
+            importance_weight=ttp_score,
+            signal_direction="RISK_INCREASING" if overall_sev in [SeverityLevel.CRITICAL, SeverityLevel.HIGH] else "RISK_DECREASING",
+            evidence_rationale=f"{critical_alert_count} alert(s) exhibited active adversary execution signatures."
+        ))
+
+        # 3. Shannon Entropy Anomaly & Bursts (10 - 25)
+        entropy_val = chaff_meta.get("entropy", 0.0)
+        entropy_score = 22.0 if entropy_val > 2.5 or chaff_meta.get("is_chaff_detected") else 12.0
+        attributions.append(XAiFeatureAttribution(
+            feature_name="Temporal Entropy & Anti-Chaff Score",
+            importance_weight=entropy_score,
+            signal_direction="RISK_INCREASING" if entropy_val > 2.5 else "NEUTRAL",
+            evidence_rationale=f"Cluster temporal entropy evaluated at {entropy_val:.2f} bits (flood suppression: {chaff_meta.get('is_chaff_detected', False)})."
+        ))
+
+        # 4. Critical Asset & Defense Vulnerability (10 - 25)
+        has_critical_assets = any(
+            any(k in str(ioc).lower() for k in ["sat-", "plc-", "norad", "tactical", "gw-"])
+            for a in cluster_alerts for ioc in a.iocs
+        )
+        asset_score = 22.0 if has_critical_assets else 12.0
+        attributions.append(XAiFeatureAttribution(
+            feature_name="Critical Asset & Defense Vulnerability",
+            importance_weight=asset_score,
+            signal_direction="RISK_INCREASING" if has_critical_assets else "NEUTRAL",
+            evidence_rationale="Target infrastructure includes vital defense communications, satellite links, or tactical nodes." if has_critical_assets else "General perimeter enterprise assets targeted."
+        ))
+
+        # Normalize weights so they sum to 100%
+        total_weight = sum(a.importance_weight for a in attributions)
+        if total_weight > 0:
+            for a in attributions:
+                a.importance_weight = round((a.importance_weight / total_weight) * 100.0, 1)
+
+        return XAiExplanation(
+            algorithm="Spatio-Temporal Graph + Bayesian + SHAP Feature Attribution",
+            base_rate_prior=0.10,
+            posterior_confidence=bayesian_conf,
+            feature_attributions=attributions
+        )
+
+    @classmethod
     def correlate_alerts(
         cls,
         entities: List[NormalizedStixEntity],
@@ -146,7 +218,8 @@ class SpatioTemporalGraphEngine:
         1. Applies AntiChaffFilter to suppress alert storms.
         2. Builds Spatio-Temporal Knowledge Graph.
         3. Identifies connected graph components.
-        4. Produces prioritized Incident Clusters.
+        4. Computes transparent Explainable AI (XAI) feature attribution.
+        5. Produces prioritized Incident Clusters.
         """
         if not entities:
             return []
@@ -190,9 +263,11 @@ class SpatioTemporalGraphEngine:
             has_sat = TelemetryDomain.SATELLITE_EW in domains_set
             has_siem = TelemetryDomain.CYBER_SIEM in domains_set
             has_edr = TelemetryDomain.CYBER_EDR in domains_set
+            has_cot = TelemetryDomain.TACTICAL_COT in domains_set
+            has_ocsf = TelemetryDomain.OCSF_SECURITY in domains_set
 
-            if has_sat and has_siem and has_edr:
-                stage = "Multi-Domain Impact (Space/Ground)"
+            if (has_sat or has_cot) and (has_siem or has_edr or has_ocsf):
+                stage = "Multi-Domain Impact (Space/Ground/Tactical)"
                 threat_actor = "APT28 (Fancy Bear) / Sandworm"
                 attribution_conf = 0.94
             elif has_edr and has_siem:
@@ -207,6 +282,15 @@ class SpatioTemporalGraphEngine:
                 stage = "Initial Reconnaissance / Probe"
                 threat_actor = "Uncorrelated Threat Actor"
                 attribution_conf = 0.65
+
+            # Compute XAI feature attribution
+            xai_explanation = cls._compute_xai_explanation(
+                cluster_alerts=cluster_alerts,
+                domains_set=domains_set,
+                overall_sev=overall_sev,
+                bayesian_conf=bayesian_conf,
+                chaff_meta=chaff_meta
+            )
 
             cluster_id = f"INC-2026-{uuid.uuid4().hex[:6].upper()}"
 
@@ -223,7 +307,8 @@ class SpatioTemporalGraphEngine:
                 alert_count=len(cluster_alerts),
                 domains_involved=list(domains_set),
                 alerts=cluster_alerts,
-                attack_lifecycle_stage=stage
+                attack_lifecycle_stage=stage,
+                xai_explanation=xai_explanation
             ))
 
         # Sort clusters by severity and Bayesian confidence

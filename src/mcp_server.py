@@ -11,6 +11,8 @@ Exposes defense intelligence tools directly to IBM Bob CLI and IDE:
 import os
 import sys
 import json
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 # Ensure project root is in sys.path
@@ -86,6 +88,35 @@ class AresDefenseMcpService:
             alerts = generate_adversarial_chaff_flood(sector=sector, count=40)
         elif scenario == "benign":
             alerts = generate_benign_background_noise(sector=sector)
+        elif scenario == "simulated_siem":
+            from src.data.siem_simulator import SiemSimulator
+            sim = SiemSimulator(sector=sector)
+            events = sim.generate_batch(count=30, scenario="apt_hybrid")
+            for ev in events:
+                if "class_uid" in ev:
+                    alerts.append(RawTelemetryAlert(
+                        alert_id=ev.get("finding_info", {}).get("uid", f"OCSF-{uuid.uuid4().hex[:6].upper()}"),
+                        timestamp=ev.get("time", datetime.now(timezone.utc).isoformat()),
+                        domain=TelemetryDomain.OCSF_SECURITY,
+                        source_name="OCSF v1.1 Simulator",
+                        event_code=ev.get("metadata", {}).get("event_code", "OCSF_FINDING"),
+                        raw_payload=json.dumps(ev),
+                        target_entity=ev.get("device", {}).get("hostname"),
+                        sector=sector
+                    ))
+                elif "lat" in ev and ("lon" in ev or "uid" in ev):
+                    alerts.append(RawTelemetryAlert(
+                        alert_id=ev.get("uid", f"COT-{uuid.uuid4().hex[:6].upper()}"),
+                        timestamp=ev.get("time", datetime.now(timezone.utc).isoformat()),
+                        domain=TelemetryDomain.TACTICAL_COT,
+                        source_name="Cursor-on-Target Feed",
+                        event_code=ev.get("type", "a-h-G"),
+                        raw_payload=json.dumps(ev),
+                        target_entity=ev.get("uid"),
+                        sector=sector
+                    ))
+                elif "raw_payload" in ev:
+                    alerts.append(RawTelemetryAlert(**ev))
         else:
             alerts = generate_apt_hybrid_campaign(sector=sector)
 
@@ -101,6 +132,44 @@ class AresDefenseMcpService:
             "total_alerts_in_session": len(SESSION_RAW_ALERTS),
             "sample_alert_ids": [a.alert_id for a in alerts[:5]]
         }
+
+    def simulate_siem(self, count: int = 25, scenario: str = "apt_hybrid", sector: str = "Sector-4-North") -> Dict[str, Any]:
+        """Generates and ingests simulated heterogeneous SIEM and defense telemetry."""
+        from src.data.siem_simulator import SiemSimulator
+        sim = SiemSimulator(sector=sector)
+        events = sim.generate_batch(count=count, scenario=scenario)
+        parsed_alerts: List[RawTelemetryAlert] = []
+        for ev in events:
+            if "class_uid" in ev:
+                parsed_alerts.append(RawTelemetryAlert(
+                    alert_id=ev.get("finding_info", {}).get("uid", f"OCSF-{uuid.uuid4().hex[:6].upper()}"),
+                    timestamp=ev.get("time", datetime.now(timezone.utc).isoformat()),
+                    domain=TelemetryDomain.OCSF_SECURITY,
+                    source_name="OCSF v1.1 Simulator",
+                    event_code=ev.get("metadata", {}).get("event_code", "OCSF_FINDING"),
+                    raw_payload=json.dumps(ev),
+                    target_entity=ev.get("device", {}).get("hostname"),
+                    sector=sector
+                ))
+            elif "lat" in ev and ("lon" in ev or "uid" in ev):
+                parsed_alerts.append(RawTelemetryAlert(
+                    alert_id=ev.get("uid", f"COT-{uuid.uuid4().hex[:6].upper()}"),
+                    timestamp=ev.get("time", datetime.now(timezone.utc).isoformat()),
+                    domain=TelemetryDomain.TACTICAL_COT,
+                    source_name="Cursor-on-Target Feed",
+                    event_code=ev.get("type", "a-h-G"),
+                    raw_payload=json.dumps(ev),
+                    target_entity=ev.get("uid"),
+                    sector=sector
+                ))
+            elif "raw_payload" in ev:
+                parsed_alerts.append(RawTelemetryAlert(**ev))
+
+        return self.ingest_telemetry(
+            scenario="simulated_siem",
+            sector=sector,
+            custom_alerts=parsed_alerts
+        )
 
     def correlate_alerts(self, sector: Optional[str] = None) -> Dict[str, Any]:
         """Runs the Spatio-Temporal Knowledge Graph & Anti-Chaff Correlation Engine."""
@@ -138,7 +207,8 @@ class AresDefenseMcpService:
                 "alert_count": c.alert_count,
                 "domains": [d.value for d in c.domains_involved],
                 "stage": c.attack_lifecycle_stage,
-                "top_mitre_techniques": [t.technique_id + " (" + t.name + ")" for t in c.mitre_techniques[:3]]
+                "top_mitre_techniques": [t.technique_id + " (" + t.name + ")" for t in c.mitre_techniques[:3]],
+                "xai_explanation": c.xai_explanation.model_dump() if c.xai_explanation else None
             })
 
         return {
@@ -178,6 +248,7 @@ class AresDefenseMcpService:
             "threat_actor": report.threat_actor_attribution,
             "bottom_line_up_front": report.bottom_line_up_front,
             "key_findings": report.key_findings,
+            "xai_explanation": report.xai_explanation.model_dump() if report.xai_explanation else None,
             "mitre_ttps": [
                 {
                     "id": t.technique_id,
@@ -230,7 +301,7 @@ TOOLS_REGISTRY = [
             "properties": {
                 "scenario": {
                     "type": "string",
-                    "enum": ["apt_hybrid", "chaff_flood", "benign", "custom", "real_ephemeris"],
+                    "enum": ["apt_hybrid", "chaff_flood", "benign", "custom", "real_ephemeris", "simulated_siem"],
                     "description": "Scenario to ingest"
                 },
                 "sector": {
@@ -240,6 +311,28 @@ TOOLS_REGISTRY = [
                 "file_path": {
                     "type": "string",
                     "description": "Optional path to custom JSON alerts file"
+                }
+            }
+        }
+    },
+    {
+        "name": "ares_simulate_siem",
+        "description": "Generates and ingests simulated heterogeneous SIEM and tactical defense telemetry (QRadar CEF, EDR, Suricata Syslog, OCSF v1.1, CoT).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "description": "Number of simulated alerts to generate and ingest (default: 25)"
+                },
+                "scenario": {
+                    "type": "string",
+                    "enum": ["apt_hybrid", "chaff_flood", "benign"],
+                    "description": "Scenario type (default: apt_hybrid)"
+                },
+                "sector": {
+                    "type": "string",
+                    "description": "Target operational sector (default: Sector-4-North)"
                 }
             }
         }
@@ -346,6 +439,12 @@ def run_stdio_mcp_server():
                         scenario=args.get("scenario", "apt_hybrid"),
                         sector=args.get("sector", "Sector-4-North"),
                         file_path=args.get("file_path")
+                    )
+                elif tool_name == "ares_simulate_siem":
+                    output = service.simulate_siem(
+                        count=args.get("count", 25),
+                        scenario=args.get("scenario", "apt_hybrid"),
+                        sector=args.get("sector", "Sector-4-North")
                     )
                 elif tool_name == "ares_correlate_threats":
                     output = service.correlate_alerts(sector=args.get("sector"))

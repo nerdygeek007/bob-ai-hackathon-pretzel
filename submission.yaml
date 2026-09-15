@@ -34,6 +34,8 @@ submission:
     and generates wargamed BLUF investigation summaries for commanders.
 
   key_features:
+    - "High-Throughput SIEM & Tactical Simulator streaming realistic QRadar CEF, CrowdStrike EDR, Suricata Syslog, OCSF v1.1, and Cursor-on-Target (CoT) telemetry"
+    - "Explainable AI (XAI) feature attribution framework providing transparent SHAP-style decision weights directly to defense commanders"
     - "Real-World NORAD Satellite Ephemeris Ingestion dynamically computing orbital altitude, period, and regimes (LEO/MEO/GEO)"
     - "Multi-Domain Cross-Correlation linking SIEM, Satellite RF, EDR, and SCADA alerts into unified incident clusters"
     - "Shannon Entropy Adversarial Chaff Filter suppressing 92.5% of decoy alert storms while preserving stealth zero-days"
@@ -46,7 +48,7 @@ submission:
     frameworks: ["FastAPI", "NetworkX", "Pydantic", "TailwindCSS"]
     ibm_technologies: ["IBM Bob CLI", "IBM watsonx.ai Granite 4 & 3.0", "watsonx Granite Guardian", "watsonx.governance"]
     databases: ["In-Memory Temporal Knowledge Graph", "Persistent On-Disk Token-Saver Cache"]
-    other: ["STIX 2.1", "CelesTrak NORAD GP API", "MITRE ATT&CK CTI", "Model Context Protocol (MCP)", "Uvicorn", "Pytest"]
+    other: ["STIX 2.1", "OCSF v1.1", "Cursor-on-Target (CoT)", "CelesTrak NORAD GP API", "MITRE ATT&CK CTI", "Model Context Protocol (MCP)", "Uvicorn", "Pytest"]
 
   what_we_are_most_proud_of: >
     Achieving a 100.0% threat detection recall, 95.8% precision, and an actionable 0.978 F1 score,

@@ -5,6 +5,8 @@ Spatio-Temporal Correlation, MITRE ATT&CK Mapping, and BLUF Report Generation.
 """
 
 import os
+import json
+import uuid
 from typing import List, Optional, Dict, Any, Union
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from src.engine.schemas import RawTelemetryAlert, IncidentCluster, CommanderBlufReport
+from src.engine.schemas import RawTelemetryAlert, TelemetryDomain, IncidentCluster, CommanderBlufReport
 from src.mcp_server import AresDefenseMcpService, SESSION_RAW_ALERTS, SESSION_CLUSTERS, SESSION_REPORTS
 
 app = FastAPI(
@@ -39,6 +41,12 @@ class IngestRequest(BaseModel):
     custom_alerts: Optional[List[RawTelemetryAlert]] = None
     file_path: Optional[str] = None
     clear_session: bool = False
+
+
+class SimulateRequest(BaseModel):
+    count: int = 25
+    scenario: str = "apt_hybrid"
+    sector: str = "Sector-4-North"
 
 
 @app.get("/api/health")
@@ -72,15 +80,65 @@ def get_satellite_ephemeris(query: Optional[str] = Query(None)):
     }
 
 
+@app.post("/api/simulate")
+def simulate_telemetry(req: SimulateRequest):
+    """Generates and streams simulated heterogeneous SIEM and tactical telemetry (QRadar, EDR, OCSF, CoT)."""
+    return mcp_service.simulate_siem(
+        count=req.count,
+        scenario=req.scenario,
+        sector=req.sector
+    )
+
+
 @app.post("/api/ingest")
-def ingest_telemetry(payload: Union[IngestRequest, List[RawTelemetryAlert]]):
-    """Step 1 & 2: Ingests multi-domain telemetry feeds (SIEM, Satellite, EDR, OSINT, or Custom)."""
+def ingest_telemetry(payload: Union[IngestRequest, List[Dict[str, Any]], List[RawTelemetryAlert]]):
+    """Step 1 & 2: Ingests multi-domain telemetry feeds (SIEM, Satellite, EDR, OSINT, OCSF, CoT, or Custom)."""
     if isinstance(payload, list):
-        sec = payload[0].sector if (payload and payload[0].sector) else "Sector-Custom"
+        parsed_alerts: List[RawTelemetryAlert] = []
+        for item in payload:
+            if isinstance(item, RawTelemetryAlert):
+                parsed_alerts.append(item)
+            elif isinstance(item, dict):
+                if "class_uid" in item:
+                    # OCSF v1.1 Finding
+                    parsed_alerts.append(RawTelemetryAlert(
+                        alert_id=item.get("finding_info", {}).get("uid", f"OCSF-{uuid.uuid4().hex[:6].upper()}"),
+                        timestamp=item.get("time", "2026-09-15T12:00:00Z"),
+                        domain=TelemetryDomain.OCSF_SECURITY,
+                        source_name="OCSF v1.1 Ingestion",
+                        event_code=item.get("metadata", {}).get("event_code", "OCSF_FINDING"),
+                        raw_payload=json.dumps(item),
+                        target_entity=item.get("device", {}).get("hostname"),
+                        sector="Sector-4-North"
+                    ))
+                elif "lat" in item and ("lon" in item or "uid" in item):
+                    # CoT Telemetry
+                    parsed_alerts.append(RawTelemetryAlert(
+                        alert_id=item.get("uid", f"COT-{uuid.uuid4().hex[:6].upper()}"),
+                        timestamp=item.get("time", "2026-09-15T12:00:00Z"),
+                        domain=TelemetryDomain.TACTICAL_COT,
+                        source_name="Cursor-on-Target Feed",
+                        event_code=item.get("type", "a-h-G"),
+                        raw_payload=json.dumps(item),
+                        target_entity=item.get("uid"),
+                        sector="Sector-4-North"
+                    ))
+                elif "raw_payload" in item:
+                    parsed_alerts.append(RawTelemetryAlert(**item))
+                else:
+                    parsed_alerts.append(RawTelemetryAlert(
+                        alert_id=item.get("alert_id", f"ALERT-{uuid.uuid4().hex[:6].upper()}"),
+                        timestamp=item.get("timestamp", "2026-09-15T12:00:00Z"),
+                        domain=TelemetryDomain(item.get("domain", "cyber_siem")),
+                        source_name=item.get("source_name", "generic_siem"),
+                        raw_payload=json.dumps(item),
+                        sector=item.get("sector", "Sector-4-North")
+                    ))
+        sec = parsed_alerts[0].sector if (parsed_alerts and parsed_alerts[0].sector) else "Sector-Custom"
         return mcp_service.ingest_telemetry(
             scenario="custom",
             sector=sec,
-            custom_alerts=payload,
+            custom_alerts=parsed_alerts,
             clear_session=False
         )
     return mcp_service.ingest_telemetry(
