@@ -9,59 +9,47 @@
 # =============================================================================
 
 team:
-  name: "pretzel"                             # REQUIRED — e.g., "Orion Squad"
-  track: "AI"                            # REQUIRED — one of: AI | DevOps | Sustainability | Open
+  name: "Pretzel"                          # REQUIRED — e.g., "Orion Squad"
+  track: "AI"                              # REQUIRED — one of: AI | DevOps | Sustainability | Open
   lead:
-    name: "Maharshi Trivedi"                           # REQUIRED — e.g., "Alice Chen"
-    email: "trivedimaharshim@gmail.com"                          # REQUIRED — e.g., "alice.chen@ibm.com"
+    name: "Chaitanya Thakar"               # REQUIRED — e.g., "Alice Chen"
+    email: "chaitanythakar851@gmail.com"   # REQUIRED — e.g., "alice.chen@ibm.com"
   members:
-    - name: "Tirth Bhatt"                         # REQUIRED — Team member 1
-      email: "bhatttirth18@gmail.com"
-    - name: "Chaitany Thakar"                         # Add more members by copying the two lines above
-      email: "chatainythakar@gmail.com"
-    - name: "Visha Kardani"
+    - name: "Visha Kardani"                # REQUIRED — Team member 1
       email: "kardanivisha@gmail.com"
+    - name: "Maharshi Trivedi"             # Team member 2
+      email: "maharshi.trivedi@ibm.com"
+    - name: "Tirth Bhatt"                  # Team member 3
+      email: "bhatttirth18@gmail.com"
 
 submission:
-  title: "ARES: AI Threat Intelligence Correlation & Alert Prioritisation Assistant"
+  title: "Sentinel-X: Threat Intelligence Correlation & Alert Prioritisation Assistant"
 
   problem_statement: >
-    Defense analysts receive thousands of heterogeneous alerts daily from SIEM systems,
-    satellite feeds, cyber sensors, and intelligence reports. Missing a genuine threat is catastrophic,
-    chasing false positives wastes critical resources, and commanders need structured BLUF
-    (Bottom Line Up Front) investigation summaries in minutes.
+    Security Operations Centers (SOCs) face overwhelming alert fatigue from thousands of disconnected events across SIEM, satellite, and endpoint telemetry. Analysts struggle to stitch multi-stage attack vectors quickly, often misinterpreting benign space telemetry deviations as cyber incidents.
 
   solution_summary: >
-    ARES is an agentic multi-domain intelligence platform powered by IBM Bob (MCP CLI)
-    and IBM watsonx.ai Granite 3.0 that ingests multi-source feeds, filters adversarial chaff,
-    builds a Spatio-Temporal Knowledge Graph, maps attacker techniques to the MITRE ATT&CK framework,
-    and generates wargamed BLUF investigation summaries for commanders.
+    Sentinel-X is a modern threat intelligence assistant that normalizes multi-domain telemetry, maps suspicious behavior to the MITRE ATT&CK matrix, correlates chronological multi-stage campaigns, and assesses explainable risk while strictly isolating space telemetry anomalies.
 
   key_features:
-    - "Real-World NORAD Satellite Ephemeris Ingestion dynamically computing orbital altitude, period, and regimes (LEO/MEO/GEO)"
-    - "Multi-Domain Cross-Correlation linking SIEM, Satellite RF, EDR, and SCADA alerts into unified incident clusters"
-    - "Shannon Entropy Adversarial Chaff Filter suppressing 92.5% of decoy alert storms while preserving stealth zero-days"
-    - "Automated MITRE ATT&CK Enterprise and ICS TTP mapping with dynamic matrix heatmaps"
-    - "Military-standard BLUF briefings with Wargamed Courses of Action (COAs) and cryptographic sensor provenance"
-    - "Custom Model Context Protocol (MCP) server empowering IBM Bob CLI for conversational terminal war room operations"
+    - "Multi-Domain Event Ingestion & Canonical Normalization across SIEM, Satellite Telemetry, and Sensors"
+    - "Real-Time ML Correlation Engine with Chronological Multi-Stage Attack Progression Stitching"
+    - "MITRE ATT&CK Intelligence Mapping & Behavioral TTP Enrichment"
+    - "Explainable Risk Scoring with Source vs Sentinel-X Priority Discrepancy Analysis"
+    - "Interactive BLUF Executive Triage Reporting & High-Throughput Live Event Simulator"
 
   tech_stack:
-    languages: ["Python", "JavaScript", "HTML"]
-    frameworks: ["FastAPI", "NetworkX", "Pydantic", "TailwindCSS"]
-    ibm_technologies: ["IBM Bob CLI", "IBM watsonx.ai Granite 4 & 3.0", "watsonx Granite Guardian", "watsonx.governance"]
-    databases: ["In-Memory Temporal Knowledge Graph", "Persistent On-Disk Token-Saver Cache"]
-    other: ["STIX 2.1", "CelesTrak NORAD GP API", "MITRE ATT&CK CTI", "Model Context Protocol (MCP)", "Uvicorn", "Pytest"]
+    languages: ["TypeScript", "JavaScript", "HTML", "CSS", "Python"]
+    frameworks: ["React", "Vite", "Tailwind CSS", "Recharts"]
+    ibm_technologies: ["watsonx.ai", "IBM Bob", "IBM Cloud"]
+    databases: []
+    other: ["Netlify", "GitHub Actions"]
 
   what_we_are_most_proud_of: >
-    Achieving a 100.0% threat detection recall, 95.8% precision, and an actionable 0.978 F1 score,
-    combined with 92.5% adversarial chaff noise suppression via Shannon Entropy and 0.980 Granite Guardian
-    zero-hallucination grounding across real NORAD satellite ephemeris and cyber-physical sensor streams in 0.12s.
+    The unified multi-domain correlation pipeline and intuitive SaaS user interface that lets a security analyst understand and triage a complex multi-stage attack across SIEM and telemetry within 10 seconds.
 
   known_limitations: >
-    Real military tactical datalinks (Link 16) are classified under defense OPSEC; ARES ingests live
-    public CelesTrak NORAD satellite ephemeris and models spacecraft anomalies on open NASA/ESA standards.
-    Live mode connects to IBM watsonx.ai Granite in Frankfurt (eu-de), while air-gapped sovereign mode
-    runs 100% offline with zero token overhead.
+    Currently leverages an in-browser high-throughput synthetic simulation engine for realistic live data streaming; direct connectors for enterprise Splunk and Kafka brokers are in roadmap.
 
 # =============================================================================
 # ARTIFACT LOCATIONS

@@ -1,22 +1,22 @@
-# Problem Statement: D2 Threat Intelligence Correlation & Alert Prioritisation Assistant
+# Problem Statement
 
 ## Background
-Military defense networks, tactical operation centers, and national security SOCs operate in complex, multi-domain battle spaces spanning land, air, sea, space, and cyberspace. In modern hybrid warfare, state-sponsored Advanced Persistent Threats (APTs) execute synchronized campaigns that deliberately cross domain boundaries—pairing cyber intrusions with electronic warfare, satellite communications disruption, and kinetic reconnaissance.
+Modern security operations span hybrid environments that include traditional enterprise IT (Windows event logs, Active Directory, cloud infrastructure), cyber-physical telemetry, and aerospace systems (satellite downlinks, orbital sensors, and ground station controls). Security Operations Centers (SOCs) receive upwards of 10,000 events per second from disparate logging systems.
 
 ## The Problem
-Defense intelligence analysts receive tens of thousands of alerts every day from SIEM platforms (QRadar, Splunk), satellite telemetry relays, endpoint EDR agents, and OSINT feeds. Each system outputs data in disparate schemas and inconsistent formats. No human analyst team can manually triage this volume under operational time pressure. 
-Crucially:
-1. **The Cost of a False Negative:** Missing a genuine coordinated threat can compromise military command networks, satellite telemetry locks, or tactical data feeds.
-2. **The Cost of False Positives:** Chasing non-actionable false alarms and decoy alert floods exhausts critical analyst cognitive bandwidth.
-3. **Command Latency:** Commanders need actionable, structured **Bottom Line Up Front (BLUF)** briefings in minutes to make operational decisions, rather than raw log dumps hours later.
+SOC analysts suffer from severe alert fatigue and fragmented context:
+1. **Disconnected Data Streams:** Events from SIEM tools, satellite operations, and network sensors arrive in conflicting proprietary formats without a common temporal or asset baseline.
+2. **Alert Overload vs. Real Threat Detection:** Up to 85% of alerts are benign operational noise or duplicate warnings.
+3. **Telemetry Misclassification:** Benign operational anomalies (such as satellite thermal fluctuations or orbital radio fade) frequently trigger high-severity cyber alarms, diverting scarce analyst attention from genuine covert lateral movement.
+4. **Slow Multi-Stage Correlation:** Correlating multi-stage intrusion campaigns (such as Initial Access brute force leading to Credential Harvesting and Command & Control beaconing) takes hours of manual log queries across separate consoles.
 
 ## Who is Affected
-Defense intelligence analysts, cyber operations watch officers, and military commanders stationed at tactical operations centers, aerospace commands, and critical infrastructure facilities.
+- **Tier 1 & Tier 2 SOC Analysts:** Spending hours manually triaging low-context alerts and writing correlation queries.
+- **Incident Responders:** Struggling to obtain a single coherent chronological timeline of multi-stage intrusions.
+- **Aerospace & Critical Infrastructure Security Teams:** Lacking automated separation between space operational telemetry anomalies and true cyber compromise.
 
 ## Why It Matters
-In high-stakes defense environments, delay and cognitive fatigue are actively weaponized by adversaries. Adversaries generate high-volume decoy alert storms (chaff) specifically to saturate defense pipelines and distract analysts while stealthy, low-and-slow zero-day exploits penetrate critical mission systems.
+Delayed incident detection leads to prolonged dwell times, unauthorized credential compromise, and compromised critical infrastructure. A single missed multi-stage attack can cause devastating financial loss and operational disruption.
 
 ## Why Existing Solutions Fall Short
-- **Traditional SIEMs are Siloed:** Existing tools are designed for enterprise IT networks and lack models for orbital mechanics, satellite telemetry, or physical SCADA controllers.
-- **Rule-Based Triage is Brittle:** Static correlation rules cannot adapt to novel multi-stage hybrid attack patterns.
-- **Monolithic LLMs Hallucinate:** Standard generative AI models hallucinate non-existent IOCs and lack the mathematical provenance required for military decision assurance.
+Traditional SIEMs are rules-heavy, alert-noisy, and lack cross-domain correlation. Legacy tools fail to provide explainable risk scoring (e.g. why an alert was prioritized) and do not understand the domain-level difference between physical sensor telemetry and genuine adversary TTPs.
