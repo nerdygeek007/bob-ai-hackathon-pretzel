@@ -1,0 +1,6 @@
+# MITRE MCP Server – additional dependency on top of backend requirements.txt
+# Install both files:
+#   pip install -r ../backend/requirements.txt
+#   pip install -r requirements.txt
+
+fastmcp>=2.0.0

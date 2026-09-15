@@ -199,6 +199,18 @@ export interface RiskScore {
 // MITRE ATT&CK
 // ============================================================
 
+/**
+ * Result returned by the RAG backend (POST /api/mitre/map).
+ * Mirrors the Python Pydantic MitreMappingResult schema.
+ */
+export interface MitreMappingResult {
+  technique_id: string;
+  technique_name: string;
+  tactic: string;
+  confidence_score: number; // 0–100
+  evidence: string[];
+}
+
 export interface MitreTechnique {
   techniqueId: string;
   techniqueName: string;

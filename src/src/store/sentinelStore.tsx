@@ -8,7 +8,9 @@ import {
   DomainType,
   EnrichmentSourceType,
   RiskWeights,
+  MitreMappingResult,
 } from '../types';
+import { mitreService, AlertClusterPayload } from '../services/mitreService';
 import { initialDomains, initialEnrichmentSources } from '../data/mockSources';
 import { mockAlerts } from '../data/mockAlerts';
 import { mockIncidents } from '../data/mockIncidents';
@@ -24,7 +26,12 @@ interface SentinelState {
   isDemoMode: boolean;
   activeSourcesCount: number;
   totalSourcesCount: number;
-  
+
+  // MITRE RAG state
+  mitreMappings: MitreMappingResult[];
+  mitreMappingLoading: boolean;
+  mitreMappingError: string | null;
+
   // Actions
   toggleDomain: (domainId: DomainType) => void;
   toggleSource: (domainId: DomainType, sourceId: string) => void;
@@ -35,6 +42,7 @@ interface SentinelState {
   updateMinSources: (count: number) => void;
   updateIncidentWeights: (incidentId: string, weights: RiskWeights) => void;
   loadDemoData: () => void;
+  runMitreMapping: (payloads: AlertClusterPayload[]) => Promise<void>;
 }
 
 const SentinelContext = createContext<SentinelState | undefined>(undefined);
@@ -47,6 +55,26 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('INC-0042');
   const [correlationConfig, setCorrelationConfig] = useState<CorrelationConfig>(defaultCorrelationConfig);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
+
+  // MITRE RAG state
+  const [mitreMappings, setMitreMappings] = useState<MitreMappingResult[]>(
+    mitreService.getMockResults()
+  );
+  const [mitreMappingLoading, setMitreMappingLoading] = useState<boolean>(false);
+  const [mitreMappingError, setMitreMappingError] = useState<string | null>(null);
+
+  const runMitreMapping = async (payloads: AlertClusterPayload[]) => {
+    setMitreMappingLoading(true);
+    setMitreMappingError(null);
+    try {
+      const results = await mitreService.mapClusters(payloads);
+      setMitreMappings(results);
+    } catch (err) {
+      setMitreMappingError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setMitreMappingLoading(false);
+    }
+  };
 
   // Toggle entire domain
   const toggleDomain = (domainId: DomainType) => {
@@ -155,6 +183,8 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
     setSelectedIncidentId('INC-0042');
     setCorrelationConfig(defaultCorrelationConfig);
     setIsDemoMode(true);
+    setMitreMappings(mitreService.getMockResults());
+    setMitreMappingError(null);
   };
 
   // Calculate active sources count
@@ -184,6 +214,9 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
         isDemoMode,
         activeSourcesCount,
         totalSourcesCount,
+        mitreMappings,
+        mitreMappingLoading,
+        mitreMappingError,
         toggleDomain,
         toggleSource,
         toggleEnrichmentSource,
@@ -193,6 +226,7 @@ export const SentinelProvider: React.FC<{ children: ReactNode }> = ({ children }
         updateMinSources,
         updateIncidentWeights,
         loadDemoData,
+        runMitreMapping,
       }}
     >
       {children}
