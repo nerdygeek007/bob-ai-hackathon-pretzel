@@ -8,10 +8,10 @@ interface RiskGaugeProps {
 
 export const RiskGauge: React.FC<RiskGaugeProps> = ({
   score,
-  size = 110,
+  size = 100,
   showLabel = true,
 }) => {
-  const strokeWidth = 8;
+  const strokeWidth = 7;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
@@ -24,7 +24,7 @@ export const RiskGauge: React.FC<RiskGaugeProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center font-mono">
+    <div className="flex flex-col items-center justify-center">
       <div className="relative" style={{ width: size, height: size }}>
         <svg className="transform -rotate-90" width={size} height={size}>
           {/* Track */}
@@ -32,7 +32,7 @@ export const RiskGauge: React.FC<RiskGaugeProps> = ({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke="#1e293b"
+            stroke="#e5e5e5"
             strokeWidth={strokeWidth}
             fill="transparent"
           />
@@ -47,16 +47,16 @@ export const RiskGauge: React.FC<RiskGaugeProps> = ({
             strokeDashoffset={offset}
             strokeLinecap="round"
             fill="transparent"
-            className="transition-all duration-700 ease-out"
+            className="transition-all duration-500 ease-out"
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-black text-slate-100">{score}</span>
-          <span className="text-[9px] uppercase tracking-wider text-slate-400">/ 100</span>
+          <span className="text-xl font-bold font-mono text-[#171717]">{score}</span>
+          <span className="text-[10px] text-[#737373] font-medium">/ 100</span>
         </div>
       </div>
       {showLabel && (
-        <span className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-semibold">
+        <span className="text-[11px] text-[#737373] mt-1 font-medium">
           Risk Score
         </span>
       )}

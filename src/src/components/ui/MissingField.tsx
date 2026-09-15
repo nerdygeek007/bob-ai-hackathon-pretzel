@@ -11,11 +11,11 @@ export const MissingField: React.FC<MissingFieldProps> = ({
 }) => {
   return (
     <span
-      className={`inline-flex items-center text-slate-500 font-mono text-xs italic group relative cursor-help ${className}`}
-      title="Sparse data: Source adapter did not emit this field. Never fabricated."
+      className={`inline-flex items-center text-[#737373] text-xs font-mono group relative cursor-help ${className}`}
+      title="Sparse data: Source adapter did not emit this field. Sentinel-X does not fabricate missing values."
     >
-      <span className="text-slate-500 font-bold mr-1">—</span>
-      <span className="text-[11px] text-slate-500/80">{label}</span>
+      <span className="text-[#a3a3a3] mr-1">—</span>
+      <span className="text-[11px] text-[#a3a3a3]">{label}</span>
     </span>
   );
 };

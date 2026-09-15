@@ -1,260 +1,299 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  ArrowRight,
   ShieldAlert,
-  AlertTriangle,
   Flame,
   CheckCircle2,
-  Database,
-  RefreshCw,
-  Clock,
+  Cpu,
   Layers,
-  ArrowUpRight,
+  Activity,
+  Radio,
+  ExternalLink,
 } from 'lucide-react';
+import { useSentinel } from '../../store/sentinelStore';
+import { Card } from '../../components/ui/Card';
+import { SeverityBadge } from '../../components/ui/SeverityBadge';
+import { DrawerPanel } from '../../components/ui/DrawerPanel';
+import { Alert } from '../../types';
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
 } from 'recharts';
-import { useSentinel } from '../../store/sentinelStore';
-import { Card } from '../../components/ui/Card';
-import { SeverityBadge } from '../../components/ui/SeverityBadge';
-import { overviewTimelineData, priorityDistributionData } from '../../data/mockNormalization';
-import { Incident } from '../../types';
+import {
+  overviewTimelineData,
+  priorityDistributionData,
+} from '../../data/mockNormalization';
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { incidents, domains, activeSourcesCount, totalSourcesCount, setSelectedIncidentId } =
-    useSentinel();
+  const {
+    alerts,
+    incidents,
+    eventsPerSec,
+    totalEventsProcessed,
+    processingLatencyMs,
+    setSelectedIncidentId,
+  } = useSentinel();
 
-  // Metrics computation
-  const criticalCount = incidents.filter((i) => i.priority === 'CRITICAL').length;
-  const highCount = incidents.filter((i) => i.priority === 'HIGH').length;
-  const mediumCount = incidents.filter((i) => i.priority === 'MEDIUM').length;
-  const lowCount = incidents.filter((i) => i.priority === 'LOW').length;
-  const falsePositivesCount = incidents.filter(
-    (i) => i.threatAssessment === 'LIKELY_FALSE_POSITIVE'
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+
+  // Top metric computations
+  const totalAlertsCount = alerts.length;
+  const highPriorityCount = alerts.filter(
+    (a) => a.priority === 'HIGH' || a.priority === 'CRITICAL'
+  ).length;
+  const activeIncidentsCount = incidents.filter(
+    (i) => i.status !== 'RESOLVED' && i.status !== 'CLOSED'
   ).length;
 
-  const totalEventsProcessed = domains.reduce((acc, d) => acc + d.totalRecords, 0);
+  // Most important incident (INC-1042)
+  const topIncident = incidents.find((i) => i.incidentId === 'INC-1042') || incidents[0];
 
-  const handleRowClick = (incident: Incident) => {
-    setSelectedIncidentId(incident.incidentId);
-    navigate(`/incidents/${incident.incidentId}`);
+  const handleRowClick = (alert: Alert) => {
+    setSelectedAlert(alert);
+  };
+
+  const handleIncidentClick = (incidentId: string) => {
+    setSelectedIncidentId(incidentId);
+    navigate(`/incidents/${incidentId}`);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Banner */}
-      <div className="bg-[#111827] border border-[#1f293d] rounded-sm p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 pb-12">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold font-mono text-slate-100 uppercase tracking-wide">
-              SENTINEL-X COMMAND CENTER
-            </h1>
-            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">
-              OPERATIONAL SOC
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Threat Intelligence Correlation & Alert Prioritisation Assistant
+          <h1 className="text-2xl font-bold tracking-tight text-[#171717]">
+            Overview
+          </h1>
+          <p className="text-sm text-[#737373] mt-0.5">
+            Real-time threat detection, MITRE correlation, and prioritized security alerts
           </p>
         </div>
 
-        {/* System Meta telemetry chips */}
-        <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-          <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-              System Status
-            </span>
-            <span className="font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-              OPERATIONAL
-            </span>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-              Active Data Sources
-            </span>
-            <span className="font-bold text-cyan-400 mt-0.5 block">
-              {activeSourcesCount} / {totalSourcesCount} Online
-            </span>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-              Events Processed
-            </span>
-            <span className="font-bold text-slate-200 mt-0.5 block">
-              {totalEventsProcessed.toLocaleString()}
-            </span>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 px-3 py-2 rounded">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-              Last Cycle
-            </span>
-            <span className="font-bold text-slate-300 flex items-center gap-1 mt-0.5">
-              <Clock className="w-3 h-3 text-slate-400" />
-              12s ago
-            </span>
-          </div>
+        {/* 10-Second Concept Flow Strip */}
+        <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f9fafb] border border-[#e5e5e5] text-xs">
+          <span className="text-[11px] font-semibold text-[#171717]">Core Flow:</span>
+          <span className="text-[#737373]">Live Events</span>
+          <span className="text-[#a3a3a3]">→</span>
+          <span className="text-[#737373]">ML Correlation</span>
+          <span className="text-[#a3a3a3]">→</span>
+          <span className="text-[#737373]">MITRE Mapping</span>
+          <span className="text-[#a3a3a3]">→</span>
+          <span className="font-semibold text-blue-600">Actionable Alert</span>
         </div>
       </div>
 
-      {/* KPI Cards: Critical, High, Medium, Low, Correlated, Likely False Positive */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        <div className="bg-[#111827] border border-red-900/40 rounded-sm p-4 relative overflow-hidden shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-red-400 font-bold">
-              CRITICAL
+      {/* Top 4 Core Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric 1: Events Processed */}
+        <div className="bg-white border border-[#e5e5e5] rounded-xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-[#737373]">
+            Events Processed
+          </span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold tracking-tight text-[#171717] font-mono">
+              {eventsPerSec.toLocaleString()}
             </span>
-            <Flame className="w-4 h-4 text-red-400" />
+            <span className="text-xs text-[#737373]">/ sec</span>
           </div>
-          <div className="text-2xl font-black font-mono text-red-200 mt-2">{criticalCount}</div>
-          <p className="text-[10px] text-slate-500 font-mono mt-1">Requires immediate BLUF</p>
-          <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/5 rounded-full blur-xl pointer-events-none" />
+          <p className="text-[11px] text-[#737373] mt-1">
+            {totalEventsProcessed.toLocaleString()} total • {processingLatencyMs}ms latency
+          </p>
         </div>
 
-        <div className="bg-[#111827] border border-orange-900/40 rounded-sm p-4 relative overflow-hidden shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-orange-400 font-bold">
-              HIGH
+        {/* Metric 2: Alerts Detected */}
+        <div className="bg-white border border-[#e5e5e5] rounded-xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-[#737373]">
+            Alerts Detected
+          </span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold tracking-tight text-[#171717] font-mono">
+              {totalAlertsCount}
             </span>
-            <AlertTriangle className="w-4 h-4 text-orange-400" />
+            <span className="text-xs text-[#737373]">total</span>
           </div>
-          <div className="text-2xl font-black font-mono text-orange-200 mt-2">{highCount}</div>
-          <p className="text-[10px] text-slate-500 font-mono mt-1">Elevated risk correlation</p>
+          <p className="text-[11px] text-[#737373] mt-1">
+            Correlated across 3 evidence streams
+          </p>
         </div>
 
-        <div className="bg-[#111827] border border-amber-900/40 rounded-sm p-4 relative overflow-hidden shadow">
+        {/* Metric 3: High Priority */}
+        <div className="bg-white border border-[#e5e5e5] rounded-xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold">
-              MEDIUM
+            <span className="text-xs font-medium uppercase tracking-wider text-[#737373]">
+              High Priority
             </span>
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
           </div>
-          <div className="text-2xl font-black font-mono text-amber-200 mt-2">{mediumCount}</div>
-          <p className="text-[10px] text-slate-500 font-mono mt-1">Under observation</p>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold tracking-tight text-orange-600 font-mono">
+              {highPriorityCount}
+            </span>
+            <span className="text-xs text-orange-700/80 font-medium">requiring triage</span>
+          </div>
+          <p className="text-[11px] text-[#737373] mt-1">
+            Escalated by Sentinel-X risk policy
+          </p>
         </div>
 
-        <div className="bg-[#111827] border border-emerald-900/40 rounded-sm p-4 relative overflow-hidden shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
-              LOW
+        {/* Metric 4: Active Incidents */}
+        <div className="bg-white border border-[#e5e5e5] rounded-xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-[#737373]">
+            Active Incidents
+          </span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold tracking-tight text-[#171717] font-mono">
+              {activeIncidentsCount}
             </span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs text-[#737373]">multi-source</span>
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-200 mt-2">{lowCount}</div>
-          <p className="text-[10px] text-slate-500 font-mono mt-1">Routine anomalies</p>
-        </div>
-
-        <div className="bg-[#111827] border border-cyan-900/40 rounded-sm p-4 relative overflow-hidden shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-bold">
-              CORRELATED
-            </span>
-            <Layers className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="text-2xl font-black font-mono text-cyan-200 mt-2">{incidents.length}</div>
-          <p className="text-[10px] text-slate-500 font-mono mt-1">Multi-domain clusters</p>
-        </div>
-
-        <div className="bg-[#111827] border border-slate-700/50 rounded-sm p-4 relative overflow-hidden shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-              FALSE POSITIVES
-            </span>
-            <CheckCircle2 className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="text-2xl font-black font-mono text-slate-300 mt-2">
-            {falsePositivesCount}
-          </div>
-          <p className="text-[10px] text-slate-500 font-mono mt-1">AI Discard / Benign</p>
+          <p className="text-[11px] text-[#737373] mt-1">
+            Top: Possible Multi-Stage Attack
+          </p>
         </div>
       </div>
 
-      {/* Charts Section: A. Threat Timeline | B. Priority Dist | C. Domain Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* A. Threat Activity Timeline */}
-        <div className="lg:col-span-6">
+      {/* Analytics & Activity Charts: Threat Timeline (8 cols) & Priority Distribution (4 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Threat Activity Timeline Chart (8 cols) */}
+        <div className="lg:col-span-8">
           <Card
-            title="A. Threat Activity Timeline"
-            subtitle="Ingestion volume across primary operational domains"
+            title="Threat Activity Timeline"
+            subtitle="Correlated event volume across SIEM, Satellite, and Sensor domains"
+            headerAction={
+              <div className="flex items-center gap-3 text-xs text-[#737373]">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> SIEM
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" /> Satellite
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Sensors
+                </span>
+              </div>
+            }
           >
-            <div className="h-64 w-full">
+            <div className="h-[220px] w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={overviewTimelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart
+                  data={overviewTimelineData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
                   <defs>
-                    <linearGradient id="siemGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
+                    <linearGradient id="colorSiem" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
                     </linearGradient>
-                    <linearGradient id="satGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#c084fc" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#c084fc" stopOpacity={0} />
+                    <linearGradient id="colorSat" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0.0} />
                     </linearGradient>
-                    <linearGradient id="sensGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4ade80" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                    <linearGradient id="colorSensors" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="time" stroke="#475569" fontSize={10} fontStyle="italic" />
-                  <YAxis stroke="#475569" fontSize={10} />
+                  <XAxis
+                    dataKey="time"
+                    stroke="#a3a3a3"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e5e5' }}
+                  />
+                  <YAxis
+                    stroke="#a3a3a3"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#1e293b',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontFamily: 'JetBrains Mono',
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e5e5e5',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
                     }}
                   />
-                  <Area type="monotone" dataKey="siem" name="SIEM" stroke="#38bdf8" fillOpacity={1} fill="url(#siemGrad)" />
-                  <Area type="monotone" dataKey="satellite" name="Satellite" stroke="#c084fc" fillOpacity={1} fill="url(#satGrad)" />
-                  <Area type="monotone" dataKey="sensors" name="Sensors" stroke="#4ade80" fillOpacity={1} fill="url(#sensGrad)" />
+                  <Area
+                    type="monotone"
+                    dataKey="siem"
+                    name="SIEM"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorSiem)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="satellite"
+                    name="Satellite"
+                    stroke="#a855f7"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorSat)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sensors"
+                    name="Sensors"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorSensors)"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-            <div className="flex items-center justify-center gap-6 mt-2 pt-2 border-t border-slate-800 text-xs font-mono">
-              <span className="flex items-center gap-1.5 text-sky-400">
-                <span className="w-2.5 h-2.5 bg-sky-400 rounded-xs" /> SIEM
-              </span>
-              <span className="flex items-center gap-1.5 text-purple-400">
-                <span className="w-2.5 h-2.5 bg-purple-400 rounded-xs" /> SATELLITE / SPACE
-              </span>
-              <span className="flex items-center gap-1.5 text-emerald-400">
-                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-xs" /> SENSORS
-              </span>
             </div>
           </Card>
         </div>
 
-        {/* B. Priority Distribution */}
-        <div className="lg:col-span-3">
-          <Card title="B. Priority Distribution" subtitle="Computed Sentinel-X Priority">
-            <div className="h-64 w-full">
+        {/* Priority Distribution Bar Chart (4 cols) */}
+        <div className="lg:col-span-4">
+          <Card
+            title="Priority Distribution"
+            subtitle="Sentinel-X risk triage breakdown"
+          >
+            <div className="h-[220px] w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={priorityDistributionData} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
-                  <XAxis dataKey="priority" stroke="#475569" fontSize={9} />
-                  <YAxis stroke="#475569" fontSize={10} allowDecimals={false} />
+                <BarChart
+                  data={priorityDistributionData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="priority"
+                    stroke="#a3a3a3"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e5e5' }}
+                  />
+                  <YAxis
+                    stroke="#a3a3a3"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#1e293b',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontFamily: 'JetBrains Mono',
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e5e5e5',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
                     }}
                   />
-                  <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+                  <Bar dataKey="count" name="Alerts" radius={[4, 4, 0, 0]}>
                     {priorityDistributionData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
@@ -262,156 +301,377 @@ export const OverviewPage: React.FC = () => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="text-[10px] text-center text-slate-400 font-mono mt-2 pt-2 border-t border-slate-800">
-              Explainable Risk Engine Allocation
-            </div>
-          </Card>
-        </div>
-
-        {/* C. Evidence Source Activity (The 3 Primary Domains) */}
-        <div className="lg:col-span-3">
-          <Card
-            title="C. Evidence Stream Activity"
-            subtitle="The 3 primary evidence domains"
-          >
-            <div className="space-y-4 py-2 font-mono text-xs">
-              {domains.map((dom) => {
-                const activeInDom = dom.sources.filter((s) => s.enabled).length;
-                const totalInDom = dom.sources.length;
-                const percent = Math.round((dom.totalRecords / totalEventsProcessed) * 100) || 0;
-
-                return (
-                  <div key={dom.id} className="p-3 bg-slate-900/60 rounded border border-slate-800/80">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            dom.enabled ? 'bg-emerald-400' : 'bg-slate-500'
-                          }`}
-                        />
-                        <span className="font-bold text-slate-200">{dom.label}</span>
-                      </div>
-                      <span className="text-[10px] text-cyan-400">
-                        {activeInDom}/{totalInDom} active
-                      </span>
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>{dom.totalRecords.toLocaleString()} events</span>
-                      <span className="font-bold text-slate-300">{percent}%</span>
-                    </div>
-
-                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
-                      <div
-                        className={`h-full ${
-                          dom.id === 'SIEM'
-                            ? 'bg-sky-400'
-                            : dom.id === 'SATELLITE_SPACE'
-                            ? 'bg-purple-400'
-                            : 'bg-emerald-400'
-                        }`}
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-slate-500 italic mt-2 text-center">
-              MITRE ATT&CK & CISA KEV act strictly as enrichment sources.
-            </p>
           </Card>
         </div>
       </div>
 
-      {/* D. Recent Prioritized Incidents Table */}
-      <Card
-        title="D. Recent Prioritized Incidents"
-        subtitle="Correlated multi-source security incidents"
-        headerAction={
-          <button
-            onClick={() => navigate('/incidents')}
-            className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+      {/* Main Content Layout: Left (Recent Alerts) | Right (Pipeline & Top Incident) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* LEFT / LARGE SECTION (8 cols): Recent Alerts */}
+        <div className="lg:col-span-8">
+          <Card
+            title="Recent Alerts"
+            subtitle="Prioritized threat detections across active data streams"
+            headerAction={
+              <button
+                onClick={() => navigate('/alerts')}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                View all alerts <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            }
+            noPadding
           >
-            View All Correlated Incidents <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
-        }
-        noPadding
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs font-mono">
-            <thead>
-              <tr className="border-b border-[#1f293d] bg-slate-900/60 text-slate-400 text-[11px] uppercase tracking-wider font-semibold">
-                <th className="py-3 px-4">Incident ID</th>
-                <th className="py-3 px-4">Priority</th>
-                <th className="py-3 px-4">Risk Score</th>
-                <th className="py-3 px-4">Confidence</th>
-                <th className="py-3 px-4">Affected Asset</th>
-                <th className="py-3 px-4">Evidence Sources</th>
-                <th className="py-3 px-4">MITRE Techniques</th>
-                <th className="py-3 px-4">First Seen</th>
-                <th className="py-3 px-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#1e293b]/60">
-              {incidents.map((inc) => (
-                <tr
-                  key={inc.incidentId}
-                  onClick={() => handleRowClick(inc)}
-                  className="hover:bg-slate-800/50 cursor-pointer transition-colors"
-                >
-                  <td className="py-3 px-4 font-bold text-cyan-400">{inc.incidentId}</td>
-                  <td className="py-3 px-4">
-                    <SeverityBadge severity={inc.priority} size="sm" variant="sentinel" />
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-100">{inc.riskScore}</span>
-                      <span className="text-[10px] text-slate-500">/ 100</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="text-cyan-300 font-semibold">{inc.confidence}%</span>
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-slate-200">{inc.affectedAsset}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex flex-wrap gap-1">
-                      {inc.evidenceDomains.map((dom) => (
-                        <span
-                          key={dom}
-                          className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700 font-bold"
-                        >
-                          {dom}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex flex-wrap gap-1">
-                      {inc.mitreIds.map((tid) => (
-                        <span
-                          key={tid}
-                          className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-950/60 text-cyan-400 border border-cyan-800"
-                        >
-                          {tid}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-slate-400">
-                    {new Date(inc.firstSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                      {inc.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-[#e5e5e5] bg-[#f9fafb] text-[#737373] text-[11px] font-medium">
+                    <th className="py-3 px-4">Severity</th>
+                    <th className="py-3 px-4">Alert</th>
+                    <th className="py-3 px-4">Source</th>
+                    <th className="py-3 px-4">MITRE</th>
+                    <th className="py-3 px-4">Confidence</th>
+                    <th className="py-3 px-4">Priority</th>
+                    <th className="py-3 px-4 text-right">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5e5e5]">
+                  {alerts.slice(0, 6).map((alert) => (
+                    <tr
+                      key={alert.alertId}
+                      onClick={() => handleRowClick(alert)}
+                      className="hover:bg-[#f9fafb] cursor-pointer transition-colors"
+                    >
+                      <td className="py-3 px-4">
+                        <SeverityBadge severity={alert.sourceSeverity} size="sm" variant="source" />
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-[#171717]">
+                          {alert.title || alert.eventType}
+                        </div>
+                        <div className="text-[11px] text-[#737373] font-mono mt-0.5">
+                          {alert.asset || alert.indicator || alert.alertId}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-[#737373]">
+                        {alert.domain === 'SIEM' ? 'SIEM' : alert.domain === 'SATELLITE_SPACE' ? 'Satellite' : 'Sensors'}
+                      </td>
+                      <td className="py-3 px-4">
+                        {alert.mitreId ? (
+                          <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-[#f5f5f5] text-[#171717] border border-[#e5e5e5]">
+                            {alert.mitreId}
+                          </span>
+                        ) : (
+                          <span className="text-[#a3a3a3]">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-medium text-[#171717]">
+                        {alert.confidence ? `${alert.confidence}%` : '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <SeverityBadge severity={alert.priority || alert.sourceSeverity} size="sm" variant="sentinel" />
+                      </td>
+                      <td className="py-3 px-4 text-right text-[#737373] whitespace-nowrap">
+                        {Math.floor((Date.now() - new Date(alert.timestamp).getTime()) / 60000)}m ago
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
-      </Card>
+
+        {/* RIGHT / SMALL SECTION (4 cols): Pipeline & Top Incident */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Pipeline Status Flow Card */}
+          <Card
+            title="Pipeline Status"
+            subtitle="Live end-to-end intelligence pipeline"
+          >
+            <div className="space-y-3">
+              {/* Stage 1: LIVE EVENTS */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[#f9fafb] border border-[#e5e5e5]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
+                  <div>
+                    <span className="text-xs font-semibold text-[#171717] block">
+                      LIVE EVENTS
+                    </span>
+                    <span className="text-[11px] text-[#737373]">
+                      SIEM • Space • Sensors
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono text-xs font-semibold text-[#171717]">
+                  {eventsPerSec} / sec
+                </span>
+              </div>
+
+              <div className="flex justify-center -my-1 text-[#a3a3a3] text-xs">↓</div>
+
+              {/* Stage 2: PROCESSING */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[#f9fafb] border border-[#e5e5e5]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  <div>
+                    <span className="text-xs font-semibold text-[#171717] block">
+                      PROCESSING & CORRELATION
+                    </span>
+                    <span className="text-[11px] text-[#737373]">
+                      ML Behavioral Detection
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono text-xs text-blue-700 font-medium">
+                  {processingLatencyMs}ms
+                </span>
+              </div>
+
+              <div className="flex justify-center -my-1 text-[#a3a3a3] text-xs">↓</div>
+
+              {/* Stage 3: MITRE */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[#f9fafb] border border-[#e5e5e5]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  <div>
+                    <span className="text-xs font-semibold text-[#171717] block">
+                      MITRE ATT&CK
+                    </span>
+                    <span className="text-[11px] text-[#737373]">
+                      Technique Enrichment v14.1
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Synced
+                </span>
+              </div>
+
+              <div className="flex justify-center -my-1 text-[#a3a3a3] text-xs">↓</div>
+
+              {/* Stage 4: PRIORITY */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[#f9fafb] border border-[#e5e5e5]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  <div>
+                    <span className="text-xs font-semibold text-[#171717] block">
+                      SENTINEL-X PRIORITY
+                    </span>
+                    <span className="text-[11px] text-[#737373]">
+                      Explainable Risk Attribution
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                  Active
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Current Top Incident Highlight */}
+          {topIncident && (
+            <Card
+              title="Top Active Incident"
+              subtitle="Highest assessed risk incident"
+              headerAction={
+                <SeverityBadge severity={topIncident.priority} size="sm" variant="sentinel" />
+              }
+            >
+              <div className="space-y-3 text-xs">
+                <div>
+                  <div className="font-semibold text-sm text-[#171717]">
+                    {topIncident.title}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-[#737373]">
+                    <span className="font-mono font-medium text-[#171717]">{topIncident.incidentId}</span>
+                    <span>•</span>
+                    <span>Asset: <strong className="text-[#171717]">{topIncident.affectedAsset}</strong></span>
+                  </div>
+                </div>
+
+                <p className="text-[#737373] text-xs line-clamp-3 leading-relaxed">
+                  {topIncident.blufSummary}
+                </p>
+
+                <div className="pt-2 border-t border-[#e5e5e5] flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#737373]">Risk Score:</span>
+                    <span className="font-mono font-bold text-base text-[#171717]">
+                      {topIncident.riskScore}
+                    </span>
+                    <span className="text-[10px] text-[#737373]">/ 100</span>
+                  </div>
+                  <button
+                    onClick={() => handleIncidentClick(topIncident.incidentId)}
+                    className="px-3 py-1.5 rounded-lg bg-[#000000] text-white hover:bg-neutral-800 text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    Investigate <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Alert Detail Drawer when clicking an alert */}
+      <DrawerPanel
+        isOpen={!!selectedAlert}
+        onClose={() => setSelectedAlert(null)}
+        title={selectedAlert?.title || selectedAlert?.eventType || 'Alert Detail'}
+        subtitle={`Alert ID: ${selectedAlert?.alertId} • Observed on ${selectedAlert?.asset || selectedAlert?.sourceName}`}
+      >
+        {selectedAlert && (
+          <div className="space-y-6 text-xs">
+            {/* Meta Row: Status, Priority, Confidence */}
+            <div className="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-[#f9fafb] border border-[#e5e5e5]">
+              <div>
+                <span className="text-[11px] text-[#737373] block">Status</span>
+                <span className="font-medium text-[#171717] mt-0.5 block">
+                  {selectedAlert.status || 'Investigating'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#737373] block">Priority</span>
+                <div className="mt-0.5">
+                  <SeverityBadge severity={selectedAlert.priority || selectedAlert.sourceSeverity} size="sm" variant="sentinel" />
+                </div>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#737373] block">Detection Confidence</span>
+                <span className="font-mono font-semibold text-[#171717] mt-0.5 block">
+                  {selectedAlert.confidence}%
+                </span>
+              </div>
+            </div>
+
+            {/* WHAT HAPPENED? */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#737373] mb-1.5">
+                What Happened?
+              </h4>
+              <p className="text-sm text-[#171717] bg-white p-3 rounded-lg border border-[#e5e5e5] leading-relaxed">
+                {selectedAlert.whatHappened || 'Unusual behavioral telemetry detected on host.'}
+              </p>
+            </div>
+
+            {/* ATTACK BEHAVIOR */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#737373] mb-1.5">
+                Attack Behavior
+              </h4>
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-[#e5e5e5]">
+                <span className="font-medium text-[#171717]">
+                  {selectedAlert.attackBehavior || 'Command execution'}
+                </span>
+                {selectedAlert.behavioralMatch && (
+                  <span className="text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                    {selectedAlert.behavioralMatch}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* MITRE ATT&CK Enrichment */}
+            {selectedAlert.mitreId && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                    MITRE ATT&CK (Intelligence Enrichment)
+                  </h4>
+                  <span className="text-[10px] text-[#737373] italic">Enrichment layer</span>
+                </div>
+                <div className="p-3.5 rounded-lg bg-white border border-[#e5e5e5] space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-xs bg-[#f5f5f5] px-2 py-0.5 rounded border border-[#e5e5e5] text-[#171717]">
+                      {selectedAlert.mitreId}
+                    </span>
+                    <span className="font-semibold text-sm text-[#171717]">
+                      {selectedAlert.mitreName}
+                    </span>
+                    <span className="text-[11px] px-2 py-0.2 rounded-full bg-neutral-100 text-neutral-700">
+                      Tactic: {selectedAlert.mitreTactic}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#737373] leading-relaxed">
+                    {selectedAlert.mitreDescription}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* WHY WAS THIS PRIORITIZED? */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#737373] mb-1.5">
+                Why Was This Prioritized?
+              </h4>
+              <div className="p-3.5 rounded-lg bg-white border border-[#e5e5e5] space-y-2">
+                <div className="flex items-center gap-2 text-xs mb-2 pb-2 border-b border-[#e5e5e5]">
+                  <span className="text-[#737373]">Source severity:</span>
+                  <SeverityBadge severity={selectedAlert.sourceSeverity} size="sm" variant="source" />
+                  <span className="text-[#a3a3a3]">→</span>
+                  <span className="text-[#737373]">Sentinel-X Priority:</span>
+                  <SeverityBadge severity={selectedAlert.priority} size="sm" variant="sentinel" />
+                </div>
+                {selectedAlert.priorityReason && (
+                  <p className="text-xs font-medium text-blue-900 bg-blue-50/70 p-2 rounded-md border border-blue-100">
+                    Reason: {selectedAlert.priorityReason}
+                  </p>
+                )}
+                <div className="space-y-1.5 pt-1">
+                  {(selectedAlert.whyPrioritized || [
+                    '+ Strong behavioral match to attack vector',
+                    '+ Multiple related events within temporal proximity',
+                    '+ High-confidence ML detection model score',
+                  ]).map((factor, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs text-[#171717]">
+                      <span className="text-blue-600 font-bold">•</span>
+                      <span>{factor}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* EVIDENCE TIMELINE */}
+            {selectedAlert.evidenceTimeline && selectedAlert.evidenceTimeline.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#737373] mb-1.5">
+                  Evidence Timeline
+                </h4>
+                <div className="space-y-2 border-l-2 border-[#e5e5e5] ml-2 pl-3 py-1">
+                  {selectedAlert.evidenceTimeline.map((ev, idx) => (
+                    <div key={idx} className="relative text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] font-semibold text-[#171717]">
+                          {ev.time}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#f5f5f5] text-[#737373]">
+                          {ev.source}
+                        </span>
+                      </div>
+                      <div className="font-medium text-[#171717] mt-0.5">{ev.event}</div>
+                      <div className="text-[11px] text-[#737373]">{ev.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* RECOMMENDED ACTION */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#737373] mb-1.5">
+                Recommended Action
+              </h4>
+              <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-200 text-emerald-900 text-xs font-medium">
+                {selectedAlert.recommendedAction || 'Validate activity on affected asset.'}
+              </div>
+            </div>
+          </div>
+        )}
+      </DrawerPanel>
     </div>
   );
 };

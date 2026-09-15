@@ -5,9 +5,8 @@ import { Toggle } from '../../components/ui/Toggle';
 import { RefreshCw, Database, Shield, Sliders, CheckCircle2 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const { loadDemoData, isDemoMode } = useSentinel();
+  const { loadDemoData, isDemoMode, setIsDemoMode, correlationConfig, updateCorrelationWindow } = useSentinel();
   const [retentionDays, setRetentionDays] = useState(30);
-  const [streamBufferMb, setStreamBufferMb] = useState(256);
   const [autoPurgeRaw, setAutoPurgeRaw] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
 
@@ -17,101 +16,124 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl pb-12">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold font-mono text-slate-100 uppercase tracking-wide">
-          COMMAND PLATFORM SETTINGS & SIMULATION
+        <h1 className="text-2xl font-bold tracking-tight text-[#171717]">
+          Settings
         </h1>
-        <p className="text-xs text-slate-400 mt-1 font-mono">
-          System telemetry storage, demo data reload, and platform pipeline parameters
+        <p className="text-sm text-[#737373] mt-0.5">
+          Organization policies, correlation rules, and demonstration preferences
         </p>
       </div>
 
       {savedNotice && (
-        <div className="p-3 bg-emerald-950/40 border border-emerald-800 rounded text-emerald-300 font-mono text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Platform settings updated and synchronized to SOC configuration store.</span>
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>Platform configuration updated successfully.</span>
         </div>
       )}
 
-      {/* SECTION 29: DEMO / SIMULATION MODE RESET */}
+      {/* Demo / Simulation Mode Management */}
       <Card
-        title="Demo / Simulation Mode Management"
-        subtitle="Reset and populate synthetic data representing actual public sources"
+        title="Demonstration Mode"
+        subtitle="Manage synthetic data feeds and scenario playback"
       >
-        <div className="space-y-4 font-mono text-xs">
-          <p className="text-slate-300">
-            Sentinel-X contains realistic synthetic datasets reflecting OTRF Mordor, EVTX samples,
-            CIC-CSE-IDS2018, ET-Open, NASA JPL Telemanom, and OpenSky RF sensors:
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-            <div className="p-2.5 bg-slate-900 rounded border border-slate-800">
-              <span className="text-cyan-400 font-bold block">✓ Genuine Correlated Threat</span>
-              <span className="text-slate-400">INC-0042 (SERVER-07, multi-source corroboration)</span>
+        <div className="space-y-4 text-xs">
+          <div className="flex items-center justify-between p-3.5 rounded-lg bg-[#f9fafb] border border-[#e5e5e5]">
+            <div>
+              <span className="font-semibold text-sm text-[#171717] block">
+                Enable Demo Simulation
+              </span>
+              <span className="text-xs text-[#737373] mt-0.5 block">
+                Populates mock scenarios (OTRF Mordor, NASA JPL, CIC-IDS) without connecting live sensors
+              </span>
             </div>
-            <div className="p-2.5 bg-slate-900 rounded border border-slate-800">
-              <span className="text-emerald-400 font-bold block">✓ Verified False Positive</span>
-              <span className="text-slate-400">INC-0043 (WORKSTATION-14, single weak scan)</span>
-            </div>
-            <div className="p-2.5 bg-slate-900 rounded border border-slate-800">
-              <span className="text-orange-400 font-bold block">✓ Space Telemetry Anomaly</span>
-              <span className="text-slate-400">INC-0044 (SPACECRAFT-M-7 + Uplink Attempt)</span>
-            </div>
-            <div className="p-2.5 bg-slate-900 rounded border border-slate-800">
-              <span className="text-purple-400 font-bold block">✓ CISA KEV & MITRE Enrichment</span>
-              <span className="text-slate-400">PrintNightmare CVE match & APT29 TTP mapping</span>
-            </div>
+            <Toggle checked={isDemoMode} onChange={setIsDemoMode} size="sm" />
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex items-center gap-3">
             <button
               onClick={loadDemoData}
-              className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs flex items-center gap-2 shadow-md shadow-cyan-950 transition-colors cursor-pointer"
+              className="px-3.5 py-2 rounded-lg bg-[#000000] hover:bg-neutral-800 text-white font-medium text-xs flex items-center gap-2 transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Reload Fresh Demo Dataset
+              Reset Demo Dataset
             </button>
+            <span className="text-[11px] text-[#737373]">
+              Restores initial incidents, telemetry, and alerts
+            </span>
           </div>
         </div>
       </Card>
 
-      {/* Storage & Retention Settings */}
-      <Card title="Raw Evidence Storage & Telemetry Buffers" subtitle="Pipeline retention controls">
-        <div className="space-y-4 font-mono text-xs">
-          <div className="grid grid-cols-2 gap-4">
+      {/* Correlation & Risk Engine Configuration */}
+      <Card
+        title="Correlation Proximity & Risk Engine"
+        subtitle="Application correlation policies and temporal windows"
+      >
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block text-[#737373] text-[11px] font-medium mb-1">
+              Temporal Proximity Window (Minutes)
+            </label>
+            <input
+              type="number"
+              value={correlationConfig.windowMinutes}
+              onChange={(e) => updateCorrelationWindow(parseInt(e.target.value) || 15)}
+              className="w-48 bg-white border border-[#e5e5e5] rounded-md px-3 py-1.5 text-xs text-[#171717] focus:outline-none focus:border-blue-600"
+            />
+            <p className="text-[11px] text-[#737373] mt-1">
+              Events occurring on the same asset within this window are evaluated for multi-stage correlation.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-[#f9fafb] border border-[#e5e5e5] space-y-2">
+            <span className="font-semibold text-xs text-[#171717] block">Active Correlation Rules</span>
+            <div className="space-y-2">
+              {correlationConfig.rules.map((rule) => (
+                <div key={rule.ruleId} className="flex items-center justify-between text-xs py-1">
+                  <div>
+                    <span className="font-medium text-[#171717]">{rule.label}</span>
+                    <p className="text-[11px] text-[#737373]">{rule.description}</p>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-200">
+                    Enforced
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Storage & Data Retention Settings */}
+      <Card
+        title="Data Retention & Provenance"
+        subtitle="Raw forensic log caching and canonical event storage"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-400 text-[11px] uppercase mb-1">
+              <label className="block text-[#737373] text-[11px] font-medium mb-1">
                 Raw Evidence Retention (Days)
               </label>
               <input
                 type="number"
                 value={retentionDays}
-                onChange={(e) => setRetentionDays(parseInt(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-400 text-[11px] uppercase mb-1">
-                Stream Memory Buffer (MB)
-              </label>
-              <input
-                type="number"
-                value={streamBufferMb}
-                onChange={(e) => setStreamBufferMb(parseInt(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200"
+                onChange={(e) => setRetentionDays(parseInt(e.target.value) || 30)}
+                className="w-full bg-white border border-[#e5e5e5] rounded-md px-3 py-1.5 text-xs text-[#171717] focus:outline-none focus:border-blue-600"
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-3 bg-slate-900 rounded border border-slate-800">
+          <div className="flex items-center justify-between p-3.5 rounded-lg bg-[#f9fafb] border border-[#e5e5e5]">
             <div>
-              <span className="text-slate-200 font-bold block">
+              <span className="font-medium text-xs text-[#171717] block">
                 Auto-Purge Raw Payloads on Resolution
               </span>
-              <span className="text-[11px] text-slate-400 block mt-0.5">
-                Keep canonical events and provenance hash while pruning bulky raw log payloads
+              <span className="text-[11px] text-[#737373] mt-0.5 block">
+                Retains canonical events while pruning heavy raw pcap and evtx attachments
               </span>
             </div>
             <Toggle checked={autoPurgeRaw} onChange={setAutoPurgeRaw} size="sm" />
@@ -120,9 +142,9 @@ export const SettingsPage: React.FC = () => {
           <div className="pt-2">
             <button
               onClick={handleSave}
-              className="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono font-bold text-xs border border-slate-700 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-lg bg-[#000000] text-white hover:bg-neutral-800 text-xs font-medium transition-colors cursor-pointer"
             >
-              Save Platform Configuration
+              Save Changes
             </button>
           </div>
         </div>

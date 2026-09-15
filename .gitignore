@@ -38,10 +38,12 @@ yarn-error.log*
 .npm
 .yarn
 dist/
+*.zip
 .next/
 .nuxt/
 .output/
 .cache/
+.playwright-mcp/
 
 # ── Java / Maven / Gradle ────────────────────────────────────────────────────
 target/
@@ -83,7 +85,7 @@ demo/*.avi
 demo/*.mkv
 
 # ── Docker volumes / local data ───────────────────────────────────────────────
-data/
+/data/
 logs/
 *.log
 
